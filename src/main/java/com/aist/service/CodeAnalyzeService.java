@@ -30,7 +30,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 代码分析服务
+ * Code analysis orchestration service.
  */
 @Slf4j
 @Service
@@ -53,7 +53,7 @@ public class CodeAnalyzeService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // 常量定义
+    // Constants
     private static final int MAX_ROUNDS = 100;
     private static final int MAX_HISTORY_SIZE = 20;
     private static final int MAX_TOOL_RESULT_LENGTH = 8000;
@@ -66,32 +66,31 @@ public class CodeAnalyzeService {
     private static final Pattern COMMIT_KEY_PATTERN = Pattern.compile("提交[iI][dD][：:]");
 
     /**
-     * 会话存储 TODO 改成数据库持久化存储。
-     * key: sessionId, value: 上下文实例
-     * 每个用户有独立的sessionId(UUID)，不会互相影响
+     * In-memory session store. TODO: persist in database.
+     * Key: sessionId, value: analysis context. Each user has an isolated session (UUID).
      */
     private final Map<String, CodeAnalyzeContextDTO> sessionContexts = new ConcurrentHashMap<>();
 
     /**
-     * 会话最后访问时间（用于过期清理）
+     * Last access time per session (used for expiration).
      */
     private final Map<String, Long> sessionLastAccess = new ConcurrentHashMap<>();
 
     /**
-     * 会话过期时间：30分钟
+     * Session TTL: 30 minutes.
      */
     private static final long SESSION_EXPIRE_MS = 30 * 60 * 1000;
 
     private void validateAnalyzeRequest(CodeAnalyzeRequest request) {
         if (request.getQuestion() == null || request.getQuestion().trim().isEmpty()) {
-            throw new IllegalArgumentException("问题描述不能为空");
+            throw new IllegalArgumentException("Question must not be empty");
         }
         String projectPath = aistConfig.getCodeRepo().getPath();
         if (projectPath == null || projectPath.isEmpty()) {
-            throw new IllegalStateException("未配置代码仓库路径");
+            throw new IllegalStateException("Code repository path is not configured");
         }
         if (!new File(projectPath).exists()) {
-            throw new IllegalStateException("代码仓库路径不存在: " + projectPath);
+            throw new IllegalStateException("Code repository path does not exist: " + projectPath);
         }
     }
 
@@ -102,12 +101,12 @@ public class CodeAnalyzeService {
         try {
             emitter.complete();
         } catch (Exception e) {
-            log.debug("emitter.complete 忽略: {}", e.getMessage());
+            log.debug("Ignoring emitter.complete failure: {}", e.getMessage());
         }
     }
 
     /**
-     * 非流式分析：一次请求返回完整结果（与 /stream 同源逻辑，无 SSE）
+     * Non-streaming analysis: one request returns the full result (same pipeline as /stream, no SSE).
      */
     public Map<String, Object> analyzeBlocking(CodeAnalyzeRequest request) {
         Map<String, Object> result = new HashMap<>();
@@ -126,25 +125,25 @@ public class CodeAnalyzeService {
             result.put("data", ans != null ? ans : "");
             return result;
         } catch (IllegalArgumentException | IllegalStateException e) {
-            log.warn("分析请求无效: {}", e.getMessage());
+            log.warn("Invalid analysis request: {}", e.getMessage());
             result.put("success", false);
             result.put("eventType", CodeAnalyzeEvent.TYPE_ERROR);
             result.put("message", e.getMessage());
             return result;
         } catch (Exception e) {
-            log.error("代码分析失败", e);
+            log.error("Code analysis failed", e);
             result.put("success", false);
             result.put("eventType", CodeAnalyzeEvent.TYPE_ERROR);
-            result.put("message", "分析失败: " + e.getMessage());
+            result.put("message", "Analysis failed: " + e.getMessage());
             return result;
         }
     }
 
     /**
-     * 流式分析代码
+     * Streamed code analysis.
      *
-     * @param request 请求
-     * @param emitter SSE发射器
+     * @param request HTTP request DTO
+     * @param emitter SSE emitter
      */
     public void analyzeWithStream(CodeAnalyzeRequest request, SseEmitter emitter) {
         CodeAnalyzeContextDTO context = null;
@@ -168,19 +167,19 @@ public class CodeAnalyzeService {
             completeEmitter(emitter);
 
         } catch (IllegalArgumentException | IllegalStateException e) {
-            log.warn("分析请求无效: {}", e.getMessage());
+            log.warn("Invalid analysis request: {}", e.getMessage());
             sendEventSafe(emitter, CodeAnalyzeEvent.error(e.getMessage()));
             completeEmitter(emitter);
         } catch (Exception e) {
-            log.error("代码分析失败", e);
+            log.error("Code analysis failed", e);
             try {
-                sendEventSafe(emitter, CodeAnalyzeEvent.error("分析失败: " + e.getMessage()));
+                sendEventSafe(emitter, CodeAnalyzeEvent.error("Analysis failed: " + e.getMessage()));
                 completeEmitter(emitter);
             } catch (Exception ex) {
-                log.error("发送错误事件失败", ex);
+                log.error("Failed to send error event", ex);
             }
         } finally {
-            // 关闭临时会话的日志记录器（没有 sessionId 的一次性会话）
+            // Placeholder: tear down per-session loggers for one-off runs without sessionId
             if (context != null
                     && context.getRequest() != null
                     && (context.getRequest().getSessionId() == null
@@ -191,7 +190,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 准备上下文并执行 LLM 分析（流式 / 非流式共用）
+     * Build context and run LLM analysis (shared by streaming and blocking modes).
      */
     private CodeAnalyzeContextDTO runAnalyzePipeline(CodeAnalyzeRequest request, SseEmitter emitter, boolean blockingMode)
             throws Exception {
@@ -230,7 +229,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 创建分析上下文
+     * Create a new analysis context for a request.
      */
     private CodeAnalyzeContextDTO createContext(CodeAnalyzeRequest request, String projectPath, String projectName) {
         CodeAnalyzeContextDTO context = new CodeAnalyzeContextDTO();
@@ -240,25 +239,23 @@ public class CodeAnalyzeService {
         context.setDeepseekApiKey(deepseekApiKey);
         context.setToolRegistry(toolRegistry);
 
-        // 数据库配置（从 target-db 获取）
+        // Database (from aist.target-db)
         context.setDatabaseName(aistConfig.getTargetDb().getDefaultDatabase());
-        context.setDbSourceName("dev");  // 默认数据源名称
+        context.setDbSourceName("dev");  // default datasource name
 
-        // 初始化对话历史
         context.setConversationHistory(new ArrayList<>());
 
-        // 初始化分析日志记录器
         String sessionId = request.getSessionId() != null ? request.getSessionId() : UUID.randomUUID().toString();
         try {
         } catch (Exception e) {
-            log.warn("创建分析日志记录器失败: {}", e.getMessage());
+            log.warn("Failed to initialize analysis logger: {}", e.getMessage());
         }
 
         return context;
     }
 
     /**
-     * 创建 SSE 回调
+     * Build SSE event callback for the analysis pipeline.
      */
     private AnalyzeCallback createCallback(SseEmitter emitter) {
         return new AnalyzeCallback() {
@@ -282,7 +279,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 发送事件（安全版本，忽略异常）
+     * Send an SSE event; swallow exceptions.
      */
     private void sendEventSafe(SseEmitter emitter, CodeAnalyzeEvent event) {
         if (emitter == null) {
@@ -295,7 +292,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 发送 SSE 事件
+     * Send an SSE event (errors propagate to caller).
      */
     private void sendEvent(SseEmitter emitter, CodeAnalyzeEvent event) throws IOException {
         if (emitter == null) {
@@ -308,23 +305,22 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 清理会话
+     * Remove a session and its state.
      */
     public void clearSession(String sessionId) {
         CodeAnalyzeContextDTO ctx = sessionContexts.remove(sessionId);
         sessionLastAccess.remove(sessionId);
-        // 清理会话时关闭对应的日志记录器
     }
 
     /**
-     * 清理过期会话（30分钟未访问的会话）
+     * Drop sessions that have not been accessed within {@link #SESSION_EXPIRE_MS}.
      */
     private void cleanExpiredSessions() {
         long now = System.currentTimeMillis();
         sessionLastAccess.entrySet().removeIf(entry -> {
             if (now - entry.getValue() > SESSION_EXPIRE_MS) {
                 CodeAnalyzeContextDTO ctx = sessionContexts.remove(entry.getKey());
-                log.info("清理过期会话: {}", entry.getKey());
+                log.info("Evicted expired session: {}", entry.getKey());
                 return true;
             }
             return false;
@@ -333,19 +329,18 @@ public class CodeAnalyzeService {
 
 
 
-    // ==================== LLM 智能分析 ====================
+    // ==================== LLM analysis ====================
 
     /**
-     * 执行 LLM 智能分析（入口）
-     * 若检测到影响范围分析请求且同时包含"需求内容"与"提交id"，则拆分为两路并行分析后合并；
-     * 否则走普通单路分析流程。
+     * Entry point for LLM analysis.
+     * If the question is an impact-scope analysis with both requirement content and commit ID, run a split
+     * (A/B) pass and merge; otherwise run a single pass.
      */
     private void executeLlmAnalysis(CodeAnalyzeContextDTO context) throws Exception {
         log.info("开始LLM智能分析");
 
         String question = context.getQuestion();
 
-        // 记录用户问题
         conversationRecord(context.getRequest().getSessionId(), question,
                 QuestionTypeEnum.QUESTION.getCode(), SessionTypeEnum.QUESTION.getCode());
 
@@ -354,7 +349,7 @@ public class CodeAnalyzeService {
         if (isImpactAnalysisRequest(question)) {
             String[] parts = extractImpactParts(question);
             if (parts != null) {
-                // 拆分执行：parts[0]=前缀, parts[1]=需求内容, parts[2]=提交id
+                // parts[0] prefix, [1] requirement body, [2] commit id
                 finalAnswer = executeSplitImpactAnalysis(context, parts[0], parts[1], parts[2]);
             } else {
                 finalAnswer = executeNormalLlmAnalysis(context);
@@ -367,7 +362,6 @@ public class CodeAnalyzeService {
             context.setFinalAnswer(finalAnswer);
         }
 
-        // 记录最终分析结果
         String recorded = context.getFinalAnswer() != null ? context.getFinalAnswer() : "";
         conversationRecord(context.getRequest().getSessionId(), recorded,
                 QuestionTypeEnum.DONE.getCode(), SessionTypeEnum.ANSWER.getCode());
@@ -375,16 +369,12 @@ public class CodeAnalyzeService {
         log.info("LLM智能分析完成");
     }
 
-    /**
-     * 判断是否为影响范围分析请求
-     */
     private boolean isImpactAnalysisRequest(String question) {
         return question != null && question.contains("影响范围");
     }
 
     /**
-     * 从问题中提取"需求内容"和"提交id"两个部分。
-     * 若两者同时存在则返回 String[3]：{前缀, 需求内容, 提交id}；否则返回 null（不需要拆分）。
+     * If both need key and commit key are present, returns [prefix, needs segment, commit id]; else null.
      */
     private String[] extractImpactParts(String question) {
         if (question == null) {
@@ -405,7 +395,7 @@ public class CodeAnalyzeService {
         int commitKeyStart = commitMatcher.start();
         int commitContentStart = commitMatcher.end();
 
-        // 前缀：两个关键字中先出现的那个之前的内容
+        // Prefix: text before whichever keyword appears first
         int firstKeyStart = Math.min(needsKeyStart, commitKeyStart);
         String prefix = question.substring(0, firstKeyStart).trim();
 
@@ -428,7 +418,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 拆分执行影响范围分析：分别分析需求内容（A）和提交id（B），再调用 DeepSeek 综合两路结果。
+     * Run split impact analysis: path A = requirement text, path B = commit, then merge via LLM.
      */
     private String executeSplitImpactAnalysis(CodeAnalyzeContextDTO context,
                                                String prefix, String needsContent, String commitId) throws Exception {
@@ -456,7 +446,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 基于原始上下文创建子上下文，替换问题后执行单路分析，返回最终答案文本。
+     * Clone context with a new question and run a single analysis pass; returns the final text answer.
      */
     private String runSubAnalysis(CodeAnalyzeContextDTO originalContext,
                                    String subQuestion, String label) throws Exception {
@@ -484,7 +474,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 创建带标签前缀的回调，用于子分析过程中区分步骤归属。
+     * Callback that prefixes step/error lines with a label (for A/B sub-analyses).
      */
     private AnalyzeCallback createLabeledCallback(SseEmitter emitter, String label) {
         return new AnalyzeCallback() {
@@ -508,7 +498,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 调用 DeepSeek 综合 A、B 两路影响范围分析结果，统计测试点异同。
+     * Ask DeepSeek to merge path A and path B into one impact-scope summary and compare test-point overlap.
      */
     private String combineImpactResults(CodeAnalyzeContextDTO context,
                                          String resultA, String resultB) throws Exception {
@@ -525,7 +515,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 执行单路 LLM 分析循环，返回最终答案文本（不写入 DB，由调用方决定是否记录）。
+     * Single-path LLM loop; returns the final answer text (persistence is up to the caller).
      */
     private String executeNormalLlmAnalysis(CodeAnalyzeContextDTO context) throws Exception {
         DeepSeekUtil deepSeek = new DeepSeekUtil(context.getDeepseekApiKey());
@@ -553,7 +543,6 @@ public class CodeAnalyzeService {
             messages.add(new DeepSeekUtil.Message("assistant", response));
 
 
-            // 检查是否有问题澄清请求
             String questionJson = extractQuestionJson(response);
             if (questionJson != null) {
                 log.info("检测到问题澄清请求: {}", questionJson);
@@ -576,7 +565,7 @@ public class CodeAnalyzeService {
                     }
 
                     context.setConversationHistory(messages);
-                    log.info("等待用户回答问题");
+                    log.info("Waiting for user to answer questions");
                     return null;
                 } catch (Exception e) {
                     log.error("问题 JSON 格式错误: {}", questionJson, e);
@@ -638,21 +627,16 @@ public class CodeAnalyzeService {
         return finalAnswer;
     }
 
-    /*
-     * 提取用户提示词
-     * @param sessionId 会话ID
-     * @param context 上下文
-     * @param questionType 问题类型
-     * @param sessionType 会话类型
+    /**
+     * Persist conversation text for the given session and classification.
      */
     private void conversationRecord(String sessionId, String context, int questionType, int sessionType) {
         try {
-            //记录用户提示词
             ConversationRecord conversationRecord = new ConversationRecord();
             conversationRecord.setSessionId(sessionId);
             conversationRecord.setQuestionType(questionType);
 
-            //通过正则表达式判断question中是否包含“问题+数字+：”比如："问题1："，"问题2："，有则按照规则分割开形成一个list
+            // Split on "问题1：" / "Question 1:" style markers (supports legacy Chinese UI)
             List<String> questionList = new ArrayList<>();
             Pattern pattern = Pattern.compile("问题\\d+：");
             Matcher matcher = pattern.matcher(context);
@@ -798,12 +782,8 @@ public class CodeAnalyzeService {
                 """;
     }
 
-    /**
-     * 构建用户提示词
-     */
     private String buildUserPrompt(CodeAnalyzeContextDTO context) {
         StringBuilder sb = new StringBuilder();
-
         String question = context.getQuestion();
 
         sb.append("## 用户问题\n").append(question).append("\n\n");
@@ -813,7 +793,7 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 解析工具调用请求
+     * Parse tool call directives from the model response.
      */
     private List<ToolRequest> parseToolRequests(String response) {
         List<ToolRequest> requests = new ArrayList<>();
@@ -825,7 +805,7 @@ public class CodeAnalyzeService {
 
             List<String> arguments = new ArrayList<>();
             if (argsStr != null && !argsStr.trim().isEmpty()) {
-                // 按冒号分割参数（与工具定义的格式保持一致）
+                // Split on ':' as in tool contract (may re-split substrings later per tool)
                 for (String arg : argsStr.split(":")) {
                     String trimmed = arg.trim();
                     if (!trimmed.isEmpty()) {
@@ -837,7 +817,6 @@ public class CodeAnalyzeService {
             ToolRequest req = new ToolRequest(toolName, arguments);
             requests.add(req);
 
-            // 最多5个工具调用
             if (requests.size() >= 5) {
                 break;
             }
@@ -847,31 +826,27 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 过滤工具调用标记和问题澄清标记
+     * Strip tool-call and clarification markers; keep only user-visible reasoning text.
      */
     private String filterToolCalls(String response) {
         String filtered = TOOL_CALL_PATTERN.matcher(response).replaceAll("");
 
-        // 过滤问题澄清标记（手动查找并移除）
         int askQuestionStart = filtered.indexOf("[ASK_QUESTION:");
         if (askQuestionStart != -1) {
             String questionJson = extractQuestionJson(filtered);
             if (questionJson != null) {
-                // 移除整个 [ASK_QUESTION:...] 标记
                 String toRemove = "[ASK_QUESTION:" + questionJson + "]";
                 filtered = filtered.replace(toRemove, "");
             }
         }
 
-        // 过滤思考过程
         filtered = filtered.replaceAll("(?s)<think>.*?</think>", "");
         filtered = filtered.replaceAll("(?s)\\*\\*思考过程\\*\\*.*?(?=\\n\\n|$)", "");
         return filtered.trim();
     }
 
     /**
-     * 从响应中提取问题 JSON
-     * 手动解析以正确处理嵌套的方括号
+     * Extract the JSON array inside [ASK_QUESTION:...] (handles nested brackets in strings).
      */
     private String extractQuestionJson(String response) {
         int startIndex = response.indexOf("[ASK_QUESTION:");
@@ -879,10 +854,9 @@ public class CodeAnalyzeService {
             return null;
         }
 
-        // 跳过 "[ASK_QUESTION:" 部分
         int jsonStart = startIndex + "[ASK_QUESTION:".length();
 
-        // 手动匹配 JSON 数组的边界
+        // Bracket match for the JSON array
         int bracketCount = 0;
         int jsonEnd = -1;
         boolean inString = false;
@@ -920,7 +894,7 @@ public class CodeAnalyzeService {
         }
 
         if (jsonEnd == -1) {
-            log.warn("未找到完整的问题 JSON 数组");
+            log.warn("Could not find a complete question JSON array");
             return null;
         }
 
@@ -928,25 +902,21 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 验证和修复问题 JSON 格式
+     * Validate clarification JSON; fill missing fields and required radio options.
      */
     private String validateAndFixQuestionJson(String questionJson) throws Exception {
         try {
-            // 尝试解析 JSON
             com.fasterxml.jackson.databind.JsonNode jsonNode = objectMapper.readTree(questionJson);
 
-            // 验证是否是数组
             if (!jsonNode.isArray()) {
-                throw new Exception("问题 JSON 必须是数组格式");
+                throw new Exception("Clarification payload must be a JSON array");
             }
 
-            // 验证每个问题对象的必需字段
             for (com.fasterxml.jackson.databind.JsonNode question : jsonNode) {
                 if (!question.has("id") || !question.has("question") ||
                     !question.has("description") || !question.has("option") ||
                     !question.has("default") || !question.has("type")) {
 
-                    // 尝试补充缺失的字段
                     com.fasterxml.jackson.databind.node.ObjectNode obj = (com.fasterxml.jackson.databind.node.ObjectNode) question;
 
                     if (!obj.has("id")) {
@@ -956,7 +926,6 @@ public class CodeAnalyzeService {
                         obj.put("type", "radio");
                     }
                     if (!obj.has("default")) {
-                        // 如果有 option 数组，使用第一个选项作为默认值
                         if (obj.has("option") && obj.get("option").isArray() && obj.get("option").size() > 0) {
                             obj.put("default", obj.get("option").get(0).asText());
                         } else {
@@ -968,7 +937,6 @@ public class CodeAnalyzeService {
                     }
                 }
 
-                // 验证 option 数组包含"不涉及"和"其他"
                 if (question.has("option") && question.get("option").isArray()) {
                     com.fasterxml.jackson.databind.node.ArrayNode options = (com.fasterxml.jackson.databind.node.ArrayNode) question.get("option");
                     boolean hasNotApplicable = false;
@@ -980,7 +948,6 @@ public class CodeAnalyzeService {
                         if ("其他".equals(optionText)) hasOther = true;
                     }
 
-                    // 补充缺失的选项
                     if (!hasNotApplicable) {
                         options.add("不涉及");
                     }
@@ -990,21 +957,19 @@ public class CodeAnalyzeService {
                 }
             }
 
-            // 返回修复后的 JSON
             return objectMapper.writeValueAsString(jsonNode);
 
         } catch (Exception e) {
-            log.error("JSON 解析失败，原始内容: {}", questionJson);
+            log.error("JSON parse failed, raw: {}", questionJson);
             throw e;
         }
     }
 
     /**
-     * 裁剪对话历史
+     * Trim long chat history, keeping the system message.
      */
     private void trimHistory(List<DeepSeekUtil.Message> messages) {
         while (messages.size() > MAX_HISTORY_SIZE) {
-            // 保留系统消息，删除最早的用户/助手消息
             if (!"system".equals(messages.get(1).role)) {
                 messages.remove(1);
             } else {
@@ -1014,15 +979,13 @@ public class CodeAnalyzeService {
     }
 
     /**
-     * 压缩工具结果
-     * 如果结果过长，进行智能截断
+     * Compress oversized tool output by keeping head and tail.
      */
     private String compressToolResult(String result) {
         if (result == null || result.length() <= MAX_TOOL_RESULT_LENGTH) {
             return result;
         }
 
-        // 保留开头和结尾，中间部分截断
         int headLength = MAX_TOOL_RESULT_LENGTH * 2 / 3;
         int tailLength = MAX_TOOL_RESULT_LENGTH / 3;
 

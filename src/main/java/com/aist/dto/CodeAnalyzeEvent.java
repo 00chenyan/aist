@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 代码分析 SSE 事件
+ * Server-Sent Event payload for code analysis.
  */
 @Data
 @NoArgsConstructor
@@ -13,53 +13,53 @@ import lombok.NoArgsConstructor;
 public class CodeAnalyzeEvent {
 
     /**
-     * 事件类型
+     * Event type.
      */
     private String type;
 
     /**
-     * 事件数据
+     * Event payload.
      */
     private String data;
 
-    // ==================== 事件类型常量 ====================
+    // ==================== Event type constants ====================
 
     /**
-     * 分析开始
+     * Analysis started.
      */
     public static final String TYPE_START = "start";
 
     /**
-     * 步骤进度
+     * Step progress.
      */
     public static final String TYPE_STEP = "step";
 
     /**
-     * 工具调用
+     * Tool invocation.
      */
     public static final String TYPE_TOOL = "tool";
 
     /**
-     * 内容输出（流式文本）
+     * Content output (streaming text).
      */
     public static final String TYPE_CONTENT = "content";
 
     /**
-     * 分析完成
+     * Analysis finished.
      */
     public static final String TYPE_DONE = "done";
 
     /**
-     * 错误
+     * Error.
      */
     public static final String TYPE_ERROR = "error";
 
     /**
-     * 澄清问题
+     * Clarification question.
      */
     public static final String TYPE_QUESTION = "question";
 
-    // ==================== 静态工厂方法 ====================
+    // ==================== Factory methods ====================
 
     public static CodeAnalyzeEvent start(String message) {
         return new CodeAnalyzeEvent(TYPE_START, message);
@@ -89,4 +89,3 @@ public class CodeAnalyzeEvent {
         return new CodeAnalyzeEvent(TYPE_QUESTION, jsonData);
     }
 }
-

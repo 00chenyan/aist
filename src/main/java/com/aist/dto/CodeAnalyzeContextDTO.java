@@ -11,138 +11,139 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 代码分析上下文
- * 在各阶段间传递数据
+ * Code analysis context.
+ * Carries data between pipeline stages.
  */
 @Data
 public class CodeAnalyzeContextDTO {
 
-    // ==================== 输入参数 ====================
+    // ==================== Input ====================
 
     /**
-     * 原始请求
+     * Original request.
      */
     private CodeAnalyzeRequest request;
 
     /**
-     * 项目名称
+     * Project name.
      */
     private String projectName;
 
     /**
-     * 项目代码（唯一标识）
+     * Project code (unique identifier).
      */
     private String projectCode;
 
     /**
-     * Git仓库URL
+     * Git repository URL.
      */
     private String gitRepoUrl;
 
     /**
-     * 项目代码路径
+     * Project source path.
      */
     private String projectPath;
 
     /**
-     * DeepSeek API Key
+     * DeepSeek API key.
      */
     private String deepseekApiKey;
 
-    // ==================== 解析结果 ====================
+    // ==================== Parse results ====================
 
     /**
-     * 所有解析的方法
+     * All parsed methods.
      */
     private List<MethodInfo> allMethods = new ArrayList<>();
 
     /**
-     * 方法映射表（方法签名 -> 方法信息）
+     * Method map (method signature -> method info).
      */
     private Map<String, MethodInfo> methodMap = new HashMap<>();
 
     /**
-     * 类到基础路径映射（类名 -> RequestMapping路径）
+     * Class to base path map (class name -> RequestMapping base path).
      */
     private Map<String, String> classToBasePath = new HashMap<>();
 
-    // ==================== LLM对话 ====================
+    // ==================== LLM conversation ====================
 
     /**
-     * 对话历史
+     * Conversation history.
      */
     private List<DeepSeekUtil.Message> conversationHistory = new ArrayList<>();
 
     /**
-     * 最终答案
+     * Final answer text.
      */
     private String finalAnswer;
 
     /**
-     * 非流式接口：为 true 时不向 SseEmitter 写事件（emitter 可为 null）
+     * Non-streaming mode: when true, do not write events to SseEmitter (emitter may be null).
      */
     private boolean blockingMode;
 
     /**
-     * 模型返回澄清问题时暂存 JSON（流式与非流式共用，用于结束后判断是否已提前结束）
+     * When the model returns a clarification question, JSON is stored here (shared by streaming and blocking;
+     * used after completion to detect early termination).
      */
     private String clarificationQuestionJson;
 
-    // ==================== 回调和工具 ====================
+    // ==================== Callbacks and tools ====================
 
     /**
-     * 分析回调
+     * Analysis callback.
      */
     private AnalyzeCallback callback;
 
     /**
-     * SSE 发射器（用于发送事件）
+     * SSE emitter (for sending events).
      */
-    private Object emitter;  // 使用 Object 类型避免循环依赖
+    private Object emitter;  // Object to avoid circular dependency
 
     /**
-     * 工具注册中心
+     * Tool registry.
      */
     private ToolRegistry toolRegistry;
 
 
-    // ==================== 数据库配置 ====================
+    // ==================== Database ====================
 
     /**
-     * 数据库名称
+     * Database name.
      */
     private String databaseName;
 
     /**
-     * 数据源名称
+     * Data source name.
      */
     private String dbSourceName;
 
-    // ==================== 向量配置 ====================
+    // ==================== Vector store ====================
 
     /**
-     * 向量集合名称
+     * Vector collection name.
      */
     private String vectorCollectionName;
 
-    // ==================== 便捷方法 ====================
+    // ==================== Helpers ====================
 
     /**
-     * 获取接口URL
+     * Returns the API URL from the request.
      */
     public String getApiUrl() {
         return request != null ? request.getApiUrl() : null;
     }
 
     /**
-     * 获取问题描述
+     * Returns the question from the request.
      */
     public String getQuestion() {
         return request != null ? request.getQuestion() : null;
     }
 
     /**
-     * 通知步骤进度
+     * Notifies step progress.
      */
     public void notifyStep(String step) {
         if (callback != null) {
@@ -150,26 +151,9 @@ public class CodeAnalyzeContextDTO {
         }
     }
 
-//    /**
-//     * 通知工具调用
-//     */
-//    public void notifyToolCall(String toolName, String args) {
-//        if (callback != null) {
-//            callback.onToolCall(toolName, args);
-//        }
-//    }
-
-//    /**
-//     * 通知工具结果
-//     */
-//    public void notifyToolResult(String toolName, String result) {
-//        if (callback != null) {
-//            callback.onToolResult(toolName, result);
-//        }
-//    }
 
     /**
-     * 通知内容输出
+     * Notifies content output.
      */
     public void notifyContent(String content) {
         if (callback != null) {
@@ -178,7 +162,7 @@ public class CodeAnalyzeContextDTO {
     }
 
     /**
-     * 通知错误
+     * Notifies an error.
      */
     public void notifyError(String error) {
         if (callback != null) {
@@ -186,4 +170,3 @@ public class CodeAnalyzeContextDTO {
         }
     }
 }
-

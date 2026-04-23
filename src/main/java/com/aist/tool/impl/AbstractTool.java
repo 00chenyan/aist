@@ -14,51 +14,47 @@ import java.nio.file.Paths;
 import java.util.Optional;
 
 /**
- * 工具抽象基类
- * 提供通用的工具方法
- *
+ * Abstract base for tools.
+ * Provides shared helpers.
  */
 @Slf4j
 public abstract class AbstractTool implements Tool {
 
-    // 缓存 GitIgnoreParser 实例
     private GitIgnoreParser gitIgnoreParser;
 
     @Override
     public ToolResult execute(ToolRequest request, CodeAnalyzeContextDTO context) {
-        log.info("执行工具 {}: {}", getName(), request.getArgumentsString());
+        log.info("Executing tool {}: {}", getName(), request.getArgumentsString());
 
         try {
-            // 参数校验
             String validationError = validateRequest(request);
             if (validationError != null) {
                 return ToolResult.error(getName(), request.getArgumentsString(), validationError);
             }
 
-            // 执行具体逻辑
             return doExecute(request, context);
         } catch (Exception e) {
-            log.error("工具 {} 执行失败: {}", getName(), e.getMessage(), e);
+            log.error("Tool {} failed: {}", getName(), e.getMessage(), e);
             return ToolResult.error(getName(), request.getArgumentsString(), e.getMessage());
         }
     }
 
     /**
-     * 执行具体逻辑（子类实现）
+     * Subclass implements actual behavior.
      */
     protected abstract ToolResult doExecute(ToolRequest request, CodeAnalyzeContextDTO context);
 
     /**
-     * 参数校验（子类可覆盖）
+     * Optional request validation; override when needed.
      *
-     * @return 错误信息，null表示校验通过
+     * @return error message, or null if valid
      */
     protected String validateRequest(ToolRequest request) {
         return null;
     }
 
     /**
-     * 在项目中搜索文件
+     * Finds first matching file under project root (respects .gitignore).
      */
     protected Optional<Path> searchFile(String projectRoot, String fileName) {
         try {
@@ -73,14 +69,14 @@ public abstract class AbstractTool implements Tool {
                         .findFirst();
             }
         } catch (IOException e) {
-            log.error("搜索文件失败: {}", e.getMessage());
+            log.error("File search failed: {}", e.getMessage());
             return Optional.empty();
         }
     }
 
 
     /**
-     * 获取相对路径
+     * Path relative to project root.
      */
     protected String getRelativePath(String projectRoot, Path path) {
         try {
@@ -91,7 +87,7 @@ public abstract class AbstractTool implements Tool {
     }
 
     /**
-     * 获取或创建 GitIgnoreParser 实例
+     * Cached {@link GitIgnoreParser} for the project root.
      */
     protected GitIgnoreParser getOrCreateGitIgnoreParser(String projectRoot) {
         if (gitIgnoreParser == null) {
@@ -101,10 +97,9 @@ public abstract class AbstractTool implements Tool {
     }
 
     /**
-     * 判断路径是否应该被忽略（基于 .gitignore）
+     * Whether path is ignored per {@code .gitignore}.
      */
     protected boolean isIgnored(Path path, String projectRoot) {
         return getOrCreateGitIgnoreParser(projectRoot).isIgnored(path);
     }
 }
-

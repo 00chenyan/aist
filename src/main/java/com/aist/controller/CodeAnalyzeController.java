@@ -14,8 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 代码分析 Controller
- * 提供流式响应的代码分析接口
+ * HTTP API for code analysis (blocking JSON and SSE streaming).
  */
 @Slf4j
 @RestController
@@ -25,13 +24,11 @@ public class CodeAnalyzeController {
     @Autowired
     private CodeAnalyzeService codeAnalyzeService;
 
-    /**
-     * SSE 超时时间（10分钟）
-     */
+    /** SSE connection timeout: 30 minutes. */
     private static final long SSE_TIMEOUT = 30 * 60 * 1000L;
 
     /**
-     * 非流式分析：一次返回完整结果（JSON）
+     * Synchronous analysis: single JSON response.
      */
     @PostMapping(value = "/sync", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> analyzeSync(@RequestBody CodeAnalyzeRequest request) {
@@ -40,32 +37,28 @@ public class CodeAnalyzeController {
     }
 
     /**
-     * 流式分析代码
-     * 使用 Server-Sent Events 返回分析过程和结果
+     * Streaming analysis with Server-Sent Events.
      */
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter analyzeStream(@RequestBody CodeAnalyzeRequest request) {
-        log.info("收到代码分析请求: projectId={}, apiUrl={}, question={}",
+        log.info("Code analysis request: projectId={}, apiUrl={}, question={}",
                 request.getProjectId(), request.getApiUrl(), request.getQuestion());
 
-        // 创建 SSE 发射器
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
-        // 设置回调
-        emitter.onCompletion(() -> log.info("SSE连接完成"));
-        emitter.onTimeout(() -> log.warn("SSE连接超时"));
-        emitter.onError(e -> log.error("SSE连接错误", e));
+        emitter.onCompletion(() -> log.info("SSE connection completed"));
+        emitter.onTimeout(() -> log.warn("SSE connection timed out"));
+        emitter.onError(e -> log.error("SSE connection error", e));
 
-        // 异步执行分析
         new Thread(() -> {
             try {
                 codeAnalyzeService.analyzeWithStream(request, emitter);
             } catch (Exception e) {
-                log.error("分析执行失败", e);
+                log.error("Analysis execution failed", e);
                 try {
                     emitter.completeWithError(e);
                 } catch (Exception ex) {
-                    log.error("发送错误失败", ex);
+                    log.error("Failed to complete SSE with error", ex);
                 }
             }
         }).start();
@@ -74,28 +67,27 @@ public class CodeAnalyzeController {
     }
 
     /**
-     * 创建新会话
-     * 返回会话ID，用于多轮对话
+     * Create a new session id for multi-turn analysis.
      */
     @PostMapping("/session/create")
     public ResponseEntity<Map<String, Object>> createSession() {
         String sessionId = UUID.randomUUID().toString();
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
-        result.put("message", "会话创建成功");
+        result.put("message", "Session created");
         result.put("sessionId", sessionId);
         return ResponseEntity.ok(result);
     }
 
     /**
-     * 清理会话
+     * Remove server-side state for a session.
      */
     @DeleteMapping("/session/{sessionId}")
     public ResponseEntity<Map<String, Object>> clearSession(@PathVariable String sessionId) {
         codeAnalyzeService.clearSession(sessionId);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
-        result.put("message", "会话已清理");
+        result.put("message", "Session cleared");
         return ResponseEntity.ok(result);
     }
 

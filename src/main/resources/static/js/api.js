@@ -60,19 +60,19 @@
                 body: JSON.stringify(body),
             });
         },
-        /** POST /requirements/{id}/delete — 逻辑删除（enable=0） */
+        /** POST /requirements/{id}/delete — soft delete (set enable=0) */
         softDeleteRequirement(id) {
             return fetchJson('/requirements/' + encodeURIComponent(id) + '/delete', {
                 method: 'POST',
             });
         },
-        /** POST /code/analyze/session/create — 返回 { success, sessionId } */
+        /** POST /code/analyze/session/create — returns { success, sessionId, message? } */
         createAnalyzeSession() {
             return fetchJson('/code/analyze/session/create', {
                 method: 'POST',
             });
         },
-        /** POST /code/analyze/sync — 非流式，返回 { success, eventType, data?, message? } */
+        /** POST /code/analyze/sync — blocking JSON: { success, eventType, data?, message? } */
         analyzeSync(body) {
             return fetchJson('/code/analyze/sync', {
                 method: 'POST',

@@ -5,22 +5,21 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 /**
- * 代码分析请求DTO
+ * DTO for code analysis requests.
  */
 @Data
-@ApiModel(value = "CodeAnalyzeRequest", description = "代码分析请求")
+@ApiModel(value = "CodeAnalyzeRequest", description = "Code analysis request")
 public class CodeAnalyzeRequest {
 
-    @ApiModelProperty(value = "项目ID", required = true)
+    @ApiModelProperty(value = "Project ID", required = true)
     private Long projectId;
 
-    @ApiModelProperty(value = "接口URL（可选，如 /order/list）")
+    @ApiModelProperty(value = "API URL (optional, e.g. /order/list)")
     private String apiUrl;
 
-    @ApiModelProperty(value = "问题描述", required = true)
+    @ApiModelProperty(value = "Question or problem description", required = true)
     private String question;
 
-    @ApiModelProperty(value = "会话ID（用于多轮对话）")
+    @ApiModelProperty(value = "Session ID (for multi-turn conversation)")
     private String sessionId;
 }
-

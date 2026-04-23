@@ -1,31 +1,30 @@
 package com.aist.callback;
 
 /**
- * 代码分析回调接口
- * 用于流式输出分析过程和结果
+ * Callback for code analysis.
+ * Used for streaming analysis progress and results.
  */
 public interface AnalyzeCallback {
 
     /**
-     * 步骤进度
+     * Step progress update.
      *
-     * @param step 步骤描述
+     * @param step step description
      */
     void onStep(String step);
 
 
     /**
-     * 内容输出（LLM 流式文本）
+     * Content output (streaming LLM text).
      *
-     * @param text 文本内容
+     * @param text text content
      */
     void onContent(String text);
 
     /**
-     * 发生错误
+     * Error notification.
      *
-     * @param error 错误信息
+     * @param error error message
      */
     void onError(String error);
 }
-
