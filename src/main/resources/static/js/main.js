@@ -5,8 +5,9 @@
     let iactPendingDeleteId = null;
     /** 与 requirement.html / index.html 一致，后端 CodeAnalyzeRequest.projectId */
     const ANALYZE_PROJECT_ID = 1;
-    let iactAnalyzeSessionId = null;
-    let iactAnalyzeLoading = false;
+    /** 每个 requirement 独立会话，支持多行并行分析 */
+    const iactSessionIdByReqId = Object.create(null);
+    const iactActiveAnalyzeIds = new Set();
     let iactBatchSessionActive = false;
 
     const $ = function (id) {
@@ -203,16 +204,23 @@
         }
     }
 
-    async function ensureAnalyzeSession() {
-        if (iactAnalyzeSessionId) {
-            return iactAnalyzeSessionId;
+    async function ensureAnalyzeSession(requirementId) {
+        const idStr = String(requirementId);
+        if (iactSessionIdByReqId[idStr]) {
+            return iactSessionIdByReqId[idStr];
         }
         const data = await window.IactApi.createAnalyzeSession();
         if (data && data.success && data.sessionId) {
-            iactAnalyzeSessionId = data.sessionId;
-            return iactAnalyzeSessionId;
+            iactSessionIdByReqId[idStr] = data.sessionId;
+            return iactSessionIdByReqId[idStr];
         }
         throw new Error((data && data.message) || '创建分析会话失败');
+    }
+
+    function reapplyRowAnalyzeBusyFromActiveSet() {
+        iactActiveAnalyzeIds.forEach(function (idStr) {
+            setRowAnalyzeButtonState(idStr, true);
+        });
     }
 
     async function runIactAnalyzeSync(requestBody, state) {
@@ -274,12 +282,12 @@
             return;
         }
         const prompt = buildAnalyzePrompt(record);
-        iactAnalyzeLoading = true;
+        delete iactSessionIdByReqId[idStr];
+        iactActiveAnalyzeIds.add(idStr);
         setRowAnalyzeButtonState(idStr, true);
-        iactAnalyzeSessionId = null;
         const state = { doneData: null };
         try {
-            await ensureAnalyzeSession();
+            await ensureAnalyzeSession(idStr);
             await window.IactApi.updateRequirement(
                 idStr,
                 Object.assign({}, record, { status: 1 })
@@ -288,7 +296,7 @@
             const body = {
                 projectId: ANALYZE_PROJECT_ID,
                 question: prompt.trim(),
-                sessionId: iactAnalyzeSessionId,
+                sessionId: iactSessionIdByReqId[idStr],
             };
             await runIactAnalyzeSync(body, state);
             const merged = Object.assign({}, record, {
@@ -301,7 +309,8 @@
             console.error(e);
             alert('分析或保存失败: ' + (e.message || 'Network error'));
         } finally {
-            iactAnalyzeLoading = false;
+            iactActiveAnalyzeIds.delete(idStr);
+            delete iactSessionIdByReqId[idStr];
             if (iactBatchSessionActive) {
                 setAllRowAnalyzeButtonsDisabled(true);
             } else {
@@ -317,7 +326,7 @@
         if (iactBatchSessionActive) {
             return;
         }
-        if (iactAnalyzeLoading) {
+        if (iactActiveAnalyzeIds.has(String(record.id))) {
             return;
         }
         await runAnalyzeCore(record, { skipEmptyAlert: false });
@@ -330,7 +339,7 @@
         if (iactBatchSessionActive) {
             return;
         }
-        if (iactAnalyzeLoading) {
+        if (iactActiveAnalyzeIds.size > 0) {
             return;
         }
         let raw;
@@ -491,6 +500,7 @@
                 empty.style.display = 'none';
             }
             tbody.innerHTML = records.map(buildTaskRowHtml).join('');
+            reapplyRowAnalyzeBusyFromActiveSet();
         } catch (e) {
             console.error(e);
             tbody.innerHTML =
@@ -534,6 +544,7 @@
             const dataRows = Array.from(tbody.querySelectorAll('tr[data-id]'));
             if (dataRows.length !== records.length) {
                 tbody.innerHTML = records.map(buildTaskRowHtml).join('');
+                reapplyRowAnalyzeBusyFromActiveSet();
                 return;
             }
             const byId = new Map();
@@ -544,6 +555,7 @@
                 const id = dataRows[i].getAttribute('data-id');
                 if (id == null || !byId.has(id)) {
                     tbody.innerHTML = records.map(buildTaskRowHtml).join('');
+                    reapplyRowAnalyzeBusyFromActiveSet();
                     return;
                 }
             }
@@ -567,6 +579,7 @@
                     tr.querySelector('td.col-actions').innerHTML = buildActionsCellInner(v);
                 }
             }
+            reapplyRowAnalyzeBusyFromActiveSet();
         } catch (e) {
             console.error(e);
             alert('刷新失败。请检查网络或控制台。');
@@ -646,6 +659,7 @@
             tdDesc.innerHTML = escapeHtml(v.desc);
             tr.querySelector('td.col-status').innerHTML = buildStatusCellHtml(row);
             tr.querySelector('td.col-actions').innerHTML = buildActionsCellInner(v);
+            reapplyRowAnalyzeBusyFromActiveSet();
         } catch (e) {
             if (e.status === 404) {
                 removeTaskRowFromUi(idStr);
@@ -700,7 +714,7 @@
                 if (iactBatchSessionActive) {
                     return;
                 }
-                if (iactAnalyzeLoading) {
+                if (iactActiveAnalyzeIds.has(String(id))) {
                     return;
                 }
                 const full = lastTaskRecords.find(function (r) {
