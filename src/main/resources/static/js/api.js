@@ -40,12 +40,6 @@
     }
 
     global.IactApi = {
-        fetchJson,
-        experimentalList(page, size) {
-            const p = page < 1 ? 1 : page;
-            const s = size < 1 ? 20 : Math.min(size, 100);
-            return fetchJson('/experimental/list?page=' + p + '&size=' + s);
-        },
         listRequirements(opts) {
             opts = opts || {};
             const q = opts.onlyEnabled ? '?onlyEnabled=true' : '';

@@ -14,13 +14,5 @@ public enum SessionTypeEnum {
     private final Integer code;
     private final String desc;
 
-    public static SessionTypeEnum fromCode(Integer code) {
-        for (SessionTypeEnum status : values()) {
-            if (status.getCode().equals(code)) {
-                return status;
-            }
-        }
-        return null;
-    }
 }
 

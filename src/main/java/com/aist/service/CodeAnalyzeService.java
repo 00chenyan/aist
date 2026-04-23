@@ -1,12 +1,11 @@
 package com.aist.service;
 
 import com.aist.config.AistConfig;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.aist.callback.AnalyzeCallback;
+import com.aist.enums.QuestionTypeEnum;
 import com.aist.mapper.ConversationRecordMapper;
 import com.aist.dto.CodeAnalyzeEvent;
 import com.aist.dto.CodeAnalyzeRequest;
-import com.aist.enums.QuestionTypeEnum;
 import com.aist.enums.SessionTypeEnum;
 import com.aist.filter.RelevanceFilter;
 import com.aist.dto.CodeAnalyzeContextDTO;
