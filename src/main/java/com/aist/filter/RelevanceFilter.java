@@ -87,7 +87,7 @@ public class RelevanceFilter {
             prompt.append("## 相关接口\n").append(context.getApiUrl()).append("\n\n");
         }
 
-        // 传递完整代码片段供LLM判断
+        // Pass full code blocks for the LLM to judge
         prompt.append("## 代码片段\n\n");
         for (int i = 0; i < blocks.size(); i++) {
             prompt.append("### 片段 ").append(i + 1).append(": ").append(blocks.get(i).title).append("\n");

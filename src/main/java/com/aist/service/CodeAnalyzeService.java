@@ -337,7 +337,7 @@ public class CodeAnalyzeService {
      * (A/B) pass and merge; otherwise run a single pass.
      */
     private void executeLlmAnalysis(CodeAnalyzeContextDTO context) throws Exception {
-        log.info("开始LLM智能分析");
+        log.info("Starting LLM analysis");
 
         String question = context.getQuestion();
 
@@ -366,7 +366,7 @@ public class CodeAnalyzeService {
         conversationRecord(context.getRequest().getSessionId(), recorded,
                 QuestionTypeEnum.DONE.getCode(), SessionTypeEnum.ANSWER.getCode());
 
-        log.info("LLM智能分析完成");
+        log.info("LLM analysis completed");
     }
 
     private boolean isImpactAnalysisRequest(String question) {
@@ -424,7 +424,7 @@ public class CodeAnalyzeService {
                                                String prefix, String needsContent, String commitId) throws Exception {
         String basePrefix = prefix.isEmpty() ? "" : prefix + "\n";
 
-        // A 路：需求内容
+        // Path A: requirements content
         context.notifyStep("正在分析【需求内容】影响范围...");
         String questionA = basePrefix + "需求内容：" + needsContent;
         String resultA = runSubAnalysis(context, questionA, "【需求内容】");
@@ -432,7 +432,7 @@ public class CodeAnalyzeService {
             resultA = "（需求内容分析未得到结果）";
         }
 
-        // B 路：提交id
+        // Path B: commit id
         context.notifyStep("正在分析【提交ID】影响范围...");
         String questionB = basePrefix + "提交id：" + commitId;
         String resultB = runSubAnalysis(context, questionB, "【提交ID】");
@@ -440,7 +440,7 @@ public class CodeAnalyzeService {
             resultB = "（提交ID分析未得到结果）";
         }
 
-        // 综合两路结果
+        // Merge results from both paths
         context.notifyStep("正在综合A、B版本分析结果...");
         return combineImpactResults(context, resultA, resultB);
     }
@@ -509,7 +509,7 @@ public class CodeAnalyzeService {
         List<DeepSeekUtil.Message> messages = new ArrayList<>();
         messages.add(new DeepSeekUtil.Message("system", systemPrompt));
         messages.add(new DeepSeekUtil.Message("user", userPrompt));
-        log.info("合并的用户提示词{}",userPrompt);
+        log.info("Merged user prompt: {}", userPrompt);
 
         return deepSeek.chat(messages);
     }
@@ -545,15 +545,15 @@ public class CodeAnalyzeService {
 
             String questionJson = extractQuestionJson(response);
             if (questionJson != null) {
-                log.info("检测到问题澄清请求: {}", questionJson);
+                log.info("Clarification request detected: {}", questionJson);
                 try {
                     questionJson = validateAndFixQuestionJson(questionJson);
-                    log.info("验证后的问题 JSON: {}", questionJson);
+                    log.info("Validated question JSON: {}", questionJson);
 
                     context.setClarificationQuestionJson(questionJson);
                     if (context.isBlockingMode()) {
                         context.setConversationHistory(messages);
-                        log.info("等待用户回答问题（非流式）");
+                        log.info("Waiting for user answers (non-streaming)");
                         return null;
                     }
 
@@ -568,7 +568,7 @@ public class CodeAnalyzeService {
                     log.info("Waiting for user to answer questions");
                     return null;
                 } catch (Exception e) {
-                    log.error("问题 JSON 格式错误: {}", questionJson, e);
+                    log.error("Invalid question JSON: {}", questionJson, e);
                     context.notifyContent("问题格式错误，继续分析...\n\n");
                 }
             }
@@ -636,7 +636,7 @@ public class CodeAnalyzeService {
             conversationRecord.setSessionId(sessionId);
             conversationRecord.setQuestionType(questionType);
 
-            // Split on "问题1：" / "Question 1:" style markers (supports legacy Chinese UI)
+            // Split on numbered-question line markers (matches Chinese UI pattern via Pattern below)
             List<String> questionList = new ArrayList<>();
             Pattern pattern = Pattern.compile("问题\\d+：");
             Matcher matcher = pattern.matcher(context);
@@ -644,12 +644,12 @@ public class CodeAnalyzeService {
                 int lastEnd = 0;
                 while (matcher.find()) {
                     if (lastEnd != matcher.start()) {
-                        // 添加上一个匹配项之前的内容
+                        // Content before the previous match
                         questionList.add(context.substring(lastEnd, matcher.start()).trim());
                     }
                     lastEnd = matcher.end();
                 }
-                // 添加最后一个匹配项之后的内容
+                // Content after the last match
                 if (lastEnd < context.length()) {
                     questionList.add(context.substring(lastEnd).trim());
                 }
@@ -659,7 +659,7 @@ public class CodeAnalyzeService {
                     conversationRecord.setQuestionType(QuestionTypeEnum.STEP.getCode());
                     conversationRecord.setQuestionNum(questionList.size());
                     for (String s : questionList) {
-                        //获取“回答：”后面的内容并判断是否为“不涉及”
+                        // Text after the answer label; count when marked as not applicable
                         String answer = s.substring(s.indexOf("回答：") + 3);
                         if (answer.contains("不涉及")) {
                             invalidNum++;
@@ -671,14 +671,14 @@ public class CodeAnalyzeService {
             conversationRecord.setSessionType(sessionType);
             conversationRecordMapper.insert(conversationRecord);
         } catch (Exception e) {
-            log.error("记录用户提示词失败,error:{}; sessionId:{},context:{},questionType:{},sessionType:{}"
+            log.error("Failed to record user prompt, error:{}; sessionId:{},context:{},questionType:{},sessionType:{}"
                     , e.getMessage(), sessionId, context, questionType, sessionType, e);
         }
 
     }
 
     /**
-     * 构建系统提示词
+     * Builds the system prompt.
      */
     private String buildSystemPrompt() {
         String toolDescriptions = toolRegistry.getAllToolDescriptions();

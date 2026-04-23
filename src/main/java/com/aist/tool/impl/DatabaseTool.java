@@ -174,7 +174,7 @@ public class DatabaseTool extends AbstractTool {
                 }
             }
 
-            // 查询表结构
+            // Query table structure
             result.append("### 表: ").append(tableName);
             if (tableComment != null && !tableComment.isEmpty()) {
                 result.append(" (").append(tableComment).append(")");

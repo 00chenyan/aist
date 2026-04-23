@@ -215,7 +215,7 @@ public class ViewMethodTool extends AbstractTool {
     private String formatMethodDetails(MethodInfo method, CodeAnalyzeContextDTO context) {
         StringBuilder result = new StringBuilder();
 
-        // 基本信息
+        // Basic info
         result.append("## 方法详细信息\n\n");
         result.append("**完整类名**: `").append(method.getFullClassName()).append("`\n");
         result.append("**方法名**: `").append(method.getMethodName()).append("`\n");
@@ -272,7 +272,7 @@ public class ViewMethodTool extends AbstractTool {
             result.append("\n");
         }
 
-        // 完整方法体
+        // Full method body
         result.append("### 完整方法实现\n\n");
         result.append("```java\n");
         result.append(method.getMethodBody());
@@ -297,7 +297,6 @@ public class ViewMethodTool extends AbstractTool {
     private String formatMethodTree(MethodInfo startMethod, int maxDepth, CodeAnalyzeContextDTO context) {
         StringBuilder result = new StringBuilder();
 
-        // 标题信息
         result.append("## 方法调用树分析\n\n");
         result.append("**起始方法**: `").append(startMethod.getFullClassName())
                 .append(".").append(startMethod.getMethodName()).append("`\n");
@@ -538,11 +537,11 @@ public class ViewMethodTool extends AbstractTool {
                 result.append("```java\n").append(classDefinition).append("\n```\n\n");
             }
         } catch (Exception e) {
-            log.warn("无法读取文件: {}", filePath);
+            log.warn("Cannot read file: {}", filePath);
         }
 
         if ("full".equals(mode)) {
-            // 完整模式：显示所有方法的完整代码
+            // Full mode: show full code for all methods
             result.append("### 所有方法实现\n\n");
             for (int i = 0; i < classMethods.size(); i++) {
                 MethodInfo method = classMethods.get(i);
@@ -562,7 +561,7 @@ public class ViewMethodTool extends AbstractTool {
                 result.append("---\n\n");
             }
         } else {
-            // 摘要模式：只显示方法签名列表
+            // Summary mode: method signatures only
             result.append("### 方法列表\n\n");
 
             Map<String, List<MethodInfo>> methodsByType = new LinkedHashMap<>();
