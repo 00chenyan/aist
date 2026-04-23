@@ -8,8 +8,8 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum SessionTypeEnum {
 
-    QUESTION(1, "提问"),
-    ANSWER(2, "问答");
+    QUESTION(1, "Question"),
+    ANSWER(2, "Answer");
 
     private final Integer code;
     private final String desc;

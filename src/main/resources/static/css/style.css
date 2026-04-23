@@ -1,4 +1,4 @@
-/* IATC / 管理页共用样式 — 与 index-iact.html 结构对应 */
+/* IATC / admin: shared with index-iact.html layout */
 
 :root {
     --color-bg: #e8edf3;
@@ -46,7 +46,7 @@ body {
     padding: 0 20px 32px;
 }
 
-/* 需求记录页：顶栏与列表同一张卡片，对齐内边距，避免「两块岛」割裂 */
+/* Task list: header + table share one card; align padding to avoid a split layout */
 .page-unified {
     background: var(--color-surface);
     border-radius: var(--radius-lg);
@@ -370,28 +370,28 @@ body {
     border: 1px solid transparent;
 }
 
-/* 0 待生成 */
+/* 0 = pending */
 .task-table .iact-status-label[data-status="0"] {
     color: #1e3a5f;
     background: #e0e7ef;
     border-color: #c5d0de;
 }
 
-/* 1 生成中 */
+/* 1 = in progress */
 .task-table .iact-status-label[data-status="1"] {
     color: #9a3412;
     background: #ffedd5;
     border-color: #fed7aa;
 }
 
-/* 2 已完成 */
+/* 2 = complete */
 .task-table .iact-status-label[data-status="2"] {
     color: #065f46;
     background: #d1fae5;
     border-color: #a7f3d0;
 }
 
-/* 其它 / 未识别状态 */
+/* Other / unknown */
 .task-table .iact-status-label:not([data-status="0"]):not([data-status="1"]):not([data-status="2"]) {
     color: #334155;
     background: #e2e8f0;
@@ -540,7 +540,7 @@ body {
     min-width: 96px;
 }
 
-/* 分析结果预览：默认全屏，与配置弹窗区分 */
+/* Result preview: full-screen, distinct from config modal */
 #previewModal.modal {
     padding: 0;
     align-items: stretch;
@@ -641,7 +641,7 @@ body {
     padding: 0;
 }
 
-/* 弹层内聊天（index-iact 等）：勿与右下角 .chatbot-wrapper 浮动面板混用同一套 display 规则 */
+/* In-modal chat (e.g. index-iact): do not reuse .chatbot-wrapper floating rules */
 .modal-body .chat-container {
     display: flex;
     flex-direction: column;
@@ -754,7 +754,7 @@ body {
     justify-content: flex-end;
 }
 
-/* Code analyze chatbot（与 index.html Analyze / 浮动助手一致） */
+/* Code analyze chatbot (align with index.html Analyze / floating helper) */
 .hidden {
     display: none !important;
 }
@@ -1407,7 +1407,7 @@ label.chk input {
     accent-color: var(--color-accent);
 }
 
-/* Preview：analysis_results 仅 Markdown 源码，全屏内填满剩余区域 */
+/* Preview: analysis_results = Markdown source; fill remaining area in full-screen */
 #previewContent .iact-md-read {
     flex: 1 1 auto;
     min-height: 0;

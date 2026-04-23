@@ -6,77 +6,75 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 工具接口 - 策略模式
- * 每个工具实现此接口，独立处理特定类型的查询
+ * Tool interface (strategy pattern).
+ * Each tool implements this interface and handles a specific kind of query.
  */
 public interface Tool {
 
     /**
-     * 获取工具名称（用于LLM调用）
+     * Tool name (used for LLM tool calls).
      *
-     * @return 工具名称，如 SEARCH_CONFIG
+     * @return tool name, e.g. SEARCH_CONFIG
      */
     String getName();
 
     /**
-     * 获取工具描述（用于生成提示词）
+     * Short description (used in prompts).
      *
-     * @return 工具描述（简短的一句话）
+     * @return one-line description
      */
     String getDescription();
 
     /**
-     * 获取参数说明
+     * Parameter specification.
      *
-     * @return 参数说明
+     * @return parameter description
      */
     String getParameterDescription();
 
     /**
-     * 获取使用示例（用于生成提示词）
+     * Usage examples (for prompts).
      *
-     * @return 使用示例列表，每个示例包含注释说明
+     * @return examples with brief notes
      */
     default List<String> getExamples() {
         return Collections.emptyList();
     }
 
     /**
-     * 获取适用场景说明
+     * When to use this tool.
      *
-     * @return 适用场景描述，说明什么时候应该使用这个工具
+     * @return scenario description
      */
     default String getUsageScenario() {
         return "";
     }
 
     /**
-     * 获取工具能力说明
+     * Capabilities and limitations.
      *
-     * @return 能力说明（支持什么、不支持什么、特点等）
+     * @return what is supported, not supported, and notable behavior
      */
     default String getCapabilities() {
         return "";
     }
 
     /**
-     * 获取工具优先级（用于排序）
-     * 优先级高的工具会在提示词中排在前面
+     * Sort order in prompts (lower comes first).
      *
-     * @return 优先级，数字越小优先级越高（1-100）
+     * @return priority (1–100); default medium
      */
     default int getPriority() {
-        return 50; // 默认中等优先级
+        return 50; // default medium priority
     }
 
     /**
-     * 执行工具
+     * Executes the tool.
      *
-     * @param request 工具请求
-     * @param context 分析上下文
-     * @return 工具执行结果
+     * @param request tool request
+     * @param context analysis context
+     * @return execution result
      */
     ToolResult execute(ToolRequest request, CodeAnalyzeContextDTO context);
 
 }
-

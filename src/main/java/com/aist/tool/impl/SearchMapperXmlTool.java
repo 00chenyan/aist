@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * 搜索Mapper XML工具
+ * MyBatis Mapper XML search tool.
  */
 @Slf4j
 @Component
@@ -40,9 +40,9 @@ public class SearchMapperXmlTool extends AbstractTool {
     @Override
     public List<String> getExamples() {
         return List.of(
-                "[TOOL_CALL:SEARCH_MAPPER_XML:UserMapper]     # 搜索 Mapper 文件",
-                "[TOOL_CALL:SEARCH_MAPPER_XML:selectById]     # 搜索 SQL 语句",
-                "[TOOL_CALL:SEARCH_MAPPER_XML:insert]         # 搜索插入语句"
+                "[TOOL_CALL:SEARCH_MAPPER_XML:UserMapper]     # find Mapper file",
+                "[TOOL_CALL:SEARCH_MAPPER_XML:selectById]     # find SQL statement",
+                "[TOOL_CALL:SEARCH_MAPPER_XML:insert]         # find insert statement"
         );
     }
 
@@ -62,7 +62,7 @@ public class SearchMapperXmlTool extends AbstractTool {
 
     @Override
     public int getPriority() {
-        return 16; // MyBatis XML 搜索优先级中等
+        return 16; // medium priority for MyBatis XML search
     }
 
     @Override
@@ -76,7 +76,7 @@ public class SearchMapperXmlTool extends AbstractTool {
     @Override
     protected ToolResult doExecute(ToolRequest request, CodeAnalyzeContextDTO context) {
         String mapperNameOrMethod = request.getFirstArgument();
-        log.info("搜索Mapper XML: {}", mapperNameOrMethod);
+        log.info("search Mapper XML: {}", mapperNameOrMethod);
 
         StringBuilder result = new StringBuilder();
         String keyword = mapperNameOrMethod.toLowerCase().trim();
@@ -103,13 +103,13 @@ public class SearchMapperXmlTool extends AbstractTool {
                     continue;
                 }
 
-                // 提取实际 namespace 值，检查其是否包含关键词
+                // extract namespace and check keyword
                 Pattern checkNsPattern = Pattern.compile("namespace\\s*=\\s*\"([^\"]+)\"");
                 Matcher checkNsMatcher = checkNsPattern.matcher(content);
                 boolean matchNamespace = checkNsMatcher.find() &&
                         checkNsMatcher.group(1).toLowerCase().contains(keyword);
 
-                // 用正则提取所有 id 属性值，判断是否有方法名包含关键词（精确子串匹配）
+                // all id attributes: substring match on method name
                 Pattern idCheckPattern = Pattern.compile("id\\s*=\\s*\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
                 Matcher idCheckMatcher = idCheckPattern.matcher(content);
                 boolean matchMethodId = false;
@@ -124,7 +124,7 @@ public class SearchMapperXmlTool extends AbstractTool {
                     result.append("\n### 文件: ").append(xmlFile.getFileName()).append("\n");
                     result.append("路径: ").append(getRelativePath(context.getProjectPath(), xmlFile)).append("\n\n");
 
-                    // 提取namespace
+                    // namespace
                     Pattern nsPattern = Pattern.compile("namespace\\s*=\\s*\"([^\"]+)\"");
                     Matcher nsMatcher = nsPattern.matcher(content);
                     if (nsMatcher.find()) {
@@ -133,7 +133,7 @@ public class SearchMapperXmlTool extends AbstractTool {
 
                     result.append("**SQL 语句:**\n\n");
 
-                    // 提取SQL块
+                    // SQL blocks
                     Pattern sqlPattern = Pattern.compile(
                             "<(select|insert|update|delete)\\s+[^>]*id\\s*=\\s*\"([^\"]+)\"[^>]*>([\\s\\S]*?)</\\1>",
                             Pattern.CASE_INSENSITIVE
@@ -146,7 +146,7 @@ public class SearchMapperXmlTool extends AbstractTool {
                         String methodId = sqlMatcher.group(2);
                         String sqlBody = sqlMatcher.group(3).trim();
 
-                        // namespace 匹配时展示该文件所有 SQL；否则按方法 ID 过滤
+                        // if namespace matched, show all SQL; else filter by method id
                         if (!matchNamespace && !methodId.toLowerCase().contains(keyword)) {
                             continue;
                         }
@@ -185,7 +185,7 @@ public class SearchMapperXmlTool extends AbstractTool {
     }
 
     /**
-     * 清理SQL内容
+     * Trim and indent SQL body for display.
      */
     private String cleanSqlBody(String sql) {
         if (sql == null) return "";

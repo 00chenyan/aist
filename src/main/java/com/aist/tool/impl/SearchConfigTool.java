@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * 搜索配置文件工具
+ * Search configuration files (properties, yaml, key config filenames).
  */
 @Slf4j
 @Component
@@ -46,9 +46,9 @@ public class SearchConfigTool extends AbstractTool {
     @Override
     public List<String> getExamples() {
         return List.of(
-                "[TOOL_CALL:SEARCH_CONFIG:datasource]         # 搜索数据源配置",
-                "[TOOL_CALL:SEARCH_CONFIG:redis]              # 搜索 Redis 配置",
-                "[TOOL_CALL:SEARCH_CONFIG:server.port]        # 搜索端口配置"
+                "[TOOL_CALL:SEARCH_CONFIG:datasource]         # datasource settings",
+                "[TOOL_CALL:SEARCH_CONFIG:redis]              # Redis settings",
+                "[TOOL_CALL:SEARCH_CONFIG:server.port]        # port settings"
         );
     }
 
@@ -68,7 +68,7 @@ public class SearchConfigTool extends AbstractTool {
 
     @Override
     public int getPriority() {
-        return 10; // 配置文件搜索优先级较高
+        return 10; // relatively high priority
     }
 
     @Override
@@ -82,7 +82,7 @@ public class SearchConfigTool extends AbstractTool {
     @Override
     protected ToolResult doExecute(ToolRequest request, CodeAnalyzeContextDTO context) {
         String keyword = request.getFirstArgument();
-        log.info("搜索配置文件: {}", keyword);
+        log.info("search config files: {}", keyword);
 
         StringBuilder result = new StringBuilder();
         String searchKeyword = keyword.toLowerCase().trim();
@@ -112,7 +112,7 @@ public class SearchConfigTool extends AbstractTool {
                         .collect(Collectors.toList());
             }
 
-            log.info("找到 {} 个配置文件", configFiles.size());
+            log.info("found {} config file(s)", configFiles.size());
 
             List<ConfigMatch> matches = new ArrayList<>();
 
@@ -127,7 +127,7 @@ public class SearchConfigTool extends AbstractTool {
                         }
                     }
                 } catch (IOException e) {
-                    // 忽略
+                    // skip
                 }
             }
 
@@ -171,19 +171,19 @@ public class SearchConfigTool extends AbstractTool {
     private List<String> extractConfigMatches(String content, String keyword) {
         List<String> result = new ArrayList<>();
         String[] lines = content.split("\n");
-        int lastAddedLine = -1; // 最近已输出的行索引（0-based），用于避免上下文重叠
+        int lastAddedLine = -1; // last emitted line index (0-based) to limit overlap
 
         for (int i = 0; i < lines.length; i++) {
             if (lines[i].toLowerCase().contains(keyword)) {
                 int start = Math.max(0, i - 2);
                 int end = Math.min(lines.length, i + 3);
 
-                // 仅当与上一个上下文块之间存在间隔时才插入分隔符
+                // separator only when there is a gap from the previous block
                 if (!result.isEmpty() && start > lastAddedLine + 1) {
                     result.add("...");
                 }
 
-                // 只输出尚未输出过的行，避免相邻匹配行的上下文重复
+                // skip already-printed lines to avoid duplicate context
                 int outputStart = Math.max(start, lastAddedLine + 1);
                 for (int j = outputStart; j < end; j++) {
                     result.add((j == i ? "→ " : "  ") + lines[j]);
