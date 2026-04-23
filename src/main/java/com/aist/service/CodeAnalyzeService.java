@@ -59,7 +59,7 @@ public class CodeAnalyzeService {
     private static final int MAX_HISTORY_SIZE = 20;
     private static final int MAX_TOOL_RESULT_LENGTH = 8000;
     private static final Pattern TOOL_CALL_PATTERN = Pattern.compile(
-            "\\[TOOL_CALL:([A-Z_]+):([^\\]]+)\\]",
+            "\\[TOOL_CALL:([A-Z_]+):([^]]+)]",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -332,23 +332,6 @@ public class CodeAnalyzeService {
         });
     }
 
-    /**
-     * 获取项目信息（从配置获取）
-     */
-    public Map<String, Object> getProjectInfo() {
-        Map<String, Object> info = new HashMap<>();
-        AistConfig.CodeRepoConfig codeRepo = aistConfig.getCodeRepo();
-        AistConfig.TargetDbConfig targetDb = aistConfig.getTargetDb();
-
-        String projectPath = codeRepo.getPath();
-        String projectName = projectPath != null ? new File(projectPath).getName() : "unknown";
-
-        info.put("projectName", projectName);
-        info.put("projectPath", projectPath);
-        info.put("databaseName", targetDb.getDefaultDatabase());
-
-        return info;
-    }
 
 
     // ==================== LLM 智能分析 ====================
@@ -654,40 +637,6 @@ public class CodeAnalyzeService {
 
         context.setConversationHistory(messages);
         return finalAnswer;
-    }
-
-    /**
-     * 对 AI 最终回答进行点赞/点踩评价。
-     * 只会更新 session_type = ANSWER(2) 且当前未评价的最新一条记录。
-     *
-     * @param sessionId   会话ID
-     * @param thumbStatus 1=点赞，-1=点踩
-     * @return 是否更新成功（true 表示本次成功写入评价，false 表示未找到可更新记录或入参不合法）
-     */
-    public boolean rateAnswer(String sessionId, Integer thumbStatus) {
-        if (sessionId == null || sessionId.trim().isEmpty()) {
-            return false;
-        }
-        if (thumbStatus == null || (thumbStatus != 1 && thumbStatus != -1)) {
-            return false;
-        }
-        try {
-            ConversationRecord record = conversationRecordMapper.selectOne(
-                    new LambdaQueryWrapper<ConversationRecord>()
-                            .eq(ConversationRecord::getSessionId, sessionId)
-                            .eq(ConversationRecord::getSessionType, SessionTypeEnum.ANSWER.getCode())
-                            .orderByDesc(ConversationRecord::getCreateTime)
-                            .last("LIMIT 1")
-            );
-            if (record == null) {
-                return false;
-            }
-            return conversationRecordMapper.updateById(record) > 0;
-        } catch (Exception e) {
-            log.error("更新会话评价状态失败, sessionId:{}, thumbStatus:{}, error:{}",
-                    sessionId, thumbStatus, e.getMessage(), e);
-            return false;
-        }
     }
 
     /*

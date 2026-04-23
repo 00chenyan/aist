@@ -258,49 +258,6 @@ public class GitUtil {
         return allDiffs.toString();
     }
 
-    /**
-     * 将Git差异内容保存到文件
-     *
-     * @param workDir    Git 仓库工作目录
-     * @param commitIds  提交ID列表
-     * @param outputFile 输出文件路径
-     * @return 操作结果
-     */
-    public static String saveCommitsDiffToFile(String workDir, List<String> commitIds, String outputFile) {
-        try {
-            String diffContent = getCommitsDiff(workDir, commitIds);
-
-            // 确保输出目录存在
-            File file = new File(outputFile);
-            File parentDir = file.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                parentDir.mkdirs();
-            }
-
-            // 写入文件
-            try (FileWriter writer = new FileWriter(file, StandardCharsets.UTF_8)) {
-                writer.write("Git代码变更分析\n");
-                writer.write("生成时间: " + new Date() + "\n");
-                writer.write("仓库路径: " + workDir + "\n");
-                writer.write("提交数量: " + commitIds.size() + "\n");
-                writer.write("提交列表: " + String.join(", ", commitIds) + "\n");
-                writer.write("\n");
-                // 使用字符串重复而不是repeat方法
-                for (int i = 0; i < 100; i++) {
-                    writer.write("=");
-                }
-                writer.write("\n\n");
-                writer.write(diffContent);
-            }
-
-            log.info("Git差异已保存到文件: {}", file.getAbsolutePath());
-            return "成功保存 " + commitIds.size() + " 个提交的差异到文件: " + file.getAbsolutePath();
-
-        } catch (Exception e) {
-            log.error("保存Git差异到文件失败", e);
-            throw new RuntimeException("保存Git差异到文件失败: " + e.getMessage());
-        }
-    }
 
     private static final Pattern SHORTSTAT_INSERTIONS =
             Pattern.compile("(\\d+) insertions?\\(\\+\\)");
@@ -327,53 +284,4 @@ public class GitUtil {
         return ins + del;
     }
 
-    /**
-     * 使用 git 统计单个提交的变更行数（插入 + 删除）。
-     * 优先 {@code git diff --shortstat commit^ commit}，根提交时回退为 {@code git show --shortstat}。
-     */
-    public static int getCommitChangedLineCount(String workDir, String commitId) {
-        if (commitId == null || commitId.trim().isEmpty()) {
-            return 0;
-        }
-        String id = commitId.trim();
-        try {
-            GitCommandResult r = executeGitCommand(workDir, "diff", "--shortstat", id + "^", id);
-            if (r.isSuccess()) {
-                return parseShortStatTotalLines(r.getOutput());
-            }
-            GitCommandResult r2 = executeGitCommand(workDir, "show", "-s", "--shortstat", id);
-            if (r2.isSuccess()) {
-                return parseShortStatTotalLines(r2.getOutput());
-            }
-            log.warn("无法统计提交 {} 的变更行数: {}", id, r2.getErrorOutput());
-        } catch (Exception e) {
-            log.warn("统计提交 {} 变更行数异常: {}", id, e.getMessage());
-        }
-        return 0;
-    }
-
-    /**
-     * 获取单次提交相对其父提交的补丁（优先 {@code git diff commit^ commit}，失败时回退 {@code git show --patch}）。
-     */
-    public static String getSingleCommitDiffPatch(String workDir, String commitId, int timeoutSeconds) {
-        if (commitId == null || commitId.trim().isEmpty()) {
-            return "";
-        }
-        String id = commitId.trim();
-        try {
-            GitCommandResult r1 = executeGitCommand(workDir, timeoutSeconds, "diff", id + "^", id);
-            if (r1.isSuccess()) {
-                return r1.getOutput();
-            }
-            log.debug("git diff {}^ {} 未成功，回退 git show: {}", id, id, r1.getErrorOutput());
-            GitCommandResult r2 = executeGitCommand(workDir, timeoutSeconds, "show", "--patch", "--no-textconv", id);
-            if (r2.isSuccess()) {
-                return r2.getOutput();
-            }
-            return "（获取变更失败）\n" + r2.getErrorOutput();
-        } catch (Exception e) {
-            log.warn("getSingleCommitDiffPatch id={}: {}", id, e.getMessage());
-            return "（获取变更异常）\n" + e.getMessage();
-        }
-    }
 }

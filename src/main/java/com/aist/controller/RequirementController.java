@@ -100,21 +100,6 @@ public class RequirementController {
         return ResponseEntity.ok(requirement);
     }
 
-    /**
-     * Delete a requirement by ID
-     *
-     * @param id The requirement ID
-     * @return 200 if deleted successfully, or 404 if not found
-     */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteRequirement(@PathVariable Long id) {
-        Requirement existingRequirement = requirementService.getById(id);
-        if (existingRequirement == null) {
-            return ResponseEntity.notFound().build();
-        }
-        requirementService.removeById(id);
-        return ResponseEntity.ok().build();
-    }
 
     /**
      * 逻辑删除 requirement：将 enable 置为 0（不物理删行）。DELETE 弹窗确认后应调用本接口。
@@ -127,10 +112,6 @@ public class RequirementController {
     /**
      * 软停用（与 {@link #softDeleteRequirement(Long)} 行为相同，保留兼容旧客户端）。
      */
-    @PatchMapping("/{id}/disable")
-    public ResponseEntity<Void> disableRequirement(@PathVariable Long id) {
-        return softDeleteById(id);
-    }
 
     private ResponseEntity<Void> softDeleteById(Long id) {
         Requirement existing = requirementService.getById(id);

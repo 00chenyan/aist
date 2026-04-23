@@ -94,11 +94,6 @@ public class SearchFileTool extends AbstractTool {
         List<String> args = request.getArguments();
         log.info("文件搜索参数: {}", args);
 
-        // 参数已经被按冒号分割，需要重新组合
-        // 格式1: ["keyword", "搜索内容"] 或 ["keyword", "搜索", "内容"]
-        // 格式2: ["regex", "正则表达式"]
-        // 格式3: ["line", "文件名", "行号"]
-
         if (args.isEmpty()) {
             return ToolResult.error(getName(), "", "缺少搜索参数");
         }

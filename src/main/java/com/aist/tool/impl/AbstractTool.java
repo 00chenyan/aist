@@ -78,17 +78,6 @@ public abstract class AbstractTool implements Tool {
         }
     }
 
-    /**
-     * 读取文件内容
-     */
-    protected String readFile(Path path) {
-        try {
-            return new String(Files.readAllBytes(path));
-        } catch (IOException e) {
-            log.error("读取文件失败: {}", e.getMessage());
-            return null;
-        }
-    }
 
     /**
      * 获取相对路径
