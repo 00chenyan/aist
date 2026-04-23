@@ -19,7 +19,7 @@ mybatis-plus:
 # DeepSeek API configuration
 deepseek:
   api:
-    key: sk-35e3b2f369ea4c97a90530de4366af7a
+    key: sk-xxxxxxxxxxx
 
 # aist requirement analysis configuration
 aist:
@@ -32,5 +32,5 @@ aist:
   # Code repository configuration
   code-repo:
   #  path: D:\CodeRepository\aist
-    path: D:\crm-center\crm-center
+    path: D:\CodeRepository\aist
 
