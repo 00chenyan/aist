@@ -16,40 +16,39 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * 基于 Eclipse JDT 的 Java 代码解析器
- * 专注于代码解析，不包含向量化或存储逻辑
+ * Java code parser based on Eclipse JDT, focused on parsing only (no vectorization or persistence).
  */
 public class JdtCodeIndexer {
 
     private final String projectRoot;
 
     /**
-     * 类型解析器 - 用于推断变量的类型
+     * Resolves types for local variables, fields, and static imports.
      */
     static class TypeResolver {
-        // 变量名 -> 简单类名（如：orderService -> OrderService）
+        // variable name -> simple class name (e.g. orderService -> OrderService)
         private final Map<String, String> variableToSimpleType = new HashMap<>();
 
-        // 简单类名 -> 完整类名（如：OrderService -> com.example.service.OrderService）
+        // simple class name -> fully qualified name (e.g. OrderService -> com.example.service.OrderService)
         private final Map<String, String> simpleToFullType = new HashMap<>();
 
-        // 通配符导入的包名列表（如：net.poweroak.saas.crm.modules.order.service）
+        // on-demand import package prefixes (e.g. net.example.app.modules.order.service)
         private final List<String> wildcardImports = new ArrayList<>();
 
-        // 静态方法导入映射（方法名 -> 完整类名.方法名）
-        // 例如：formatDate -> com.example.utils.DateUtils.formatDate
+        // static method imports: method name -> fully qualified class.method
+        // e.g. formatDate -> com.example.utils.DateUtils.formatDate
         private final Map<String, String> staticMethodImports = new HashMap<>();
 
-        // 当前包名
+        // current package name
         @Setter
         private String packageName = "";
 
-        // 当前类的完整类名（用于解析本类方法调用）
+        // current class FQN (for this-class method calls)
         @Setter
         private String currentFullClassName = "";
 
         /**
-         * 添加导入语句
+         * Records a type import.
          */
         public void addImport(String fullTypeName) {
             if (fullTypeName != null && fullTypeName.contains(".")) {
@@ -59,8 +58,7 @@ public class JdtCodeIndexer {
         }
 
         /**
-         * 添加静态方法导入
-         * 例如：import static com.example.utils.DateUtils.formatDate
+         * Records a static method import, e.g. {@code import static com.example.utils.DateUtils.formatDate}.
          */
         public void addStaticMethodImport(String fullMethodPath) {
             if (fullMethodPath != null && fullMethodPath.contains(".")) {
@@ -70,7 +68,7 @@ public class JdtCodeIndexer {
         }
 
         /**
-         * 添加通配符导入
+         * Records an on-demand (wildcard) import package prefix.
          */
         public void addWildcardImport(String packageName) {
             if (packageName != null && !packageName.isEmpty()) {
@@ -79,52 +77,51 @@ public class JdtCodeIndexer {
         }
 
         /**
-         * 添加变量类型映射
+         * Maps a variable name to its declared type.
          */
         public void addVariable(String variableName, String typeName) {
             if (variableName != null && typeName != null) {
-                // 移除泛型参数，保留基础类名（如 List<OrderDTO> → List）
+                // Strip type arguments; keep the raw name (e.g. List<OrderDTO> -> List)
                 String baseTypeName = typeName.replaceAll("<.*>", "").trim();
                 variableToSimpleType.put(variableName, baseTypeName);
             }
         }
 
         /**
-         * 解析类型名为完整类名
-         * 例如：OrderDTO -> com.example.dto.OrderDTO
+         * Resolves a type name to a fully qualified class name, e.g. OrderDTO -> com.example.dto.OrderDTO.
          */
         public String resolveType(String typeName) {
             if (typeName == null || typeName.isEmpty()) {
                 return typeName;
             }
 
-            // 移除泛型参数
+            // Strip type arguments
             String baseTypeName = typeName.replaceAll("<.*>", "").trim();
 
-            // 如果已经是完整类名（包含包名），直接返回
+            // Already fully qualified
             if (baseTypeName.contains(".")) {
                 return baseTypeName;
             }
 
-            // 优先检查是否是JDK常用类
+            // Prefer common JDK types
             String jdkType = resolveJdkType(baseTypeName);
             if (jdkType != null) {
                 return jdkType;
             }
 
-            // 尝试从导入映射中获取完整类名
+            // Look up explicit import
             String fullType = simpleToFullType.get(baseTypeName);
             if (fullType != null) {
                 return fullType;
             }
 
-            // 尝试从通配符导入中查找
+            // Try wildcard imports
             String bestMatch = findBestWildcardMatch(baseTypeName);
             if (bestMatch != null) {
                 return bestMatch;
             }
 
-            // 可能是同包类
+            // Default: same package
             if (!packageName.isEmpty()) {
                 return packageName + "." + baseTypeName;
             }
@@ -133,10 +130,10 @@ public class JdtCodeIndexer {
         }
 
         /**
-         * 解析JDK常用类型
+         * Resolves common JDK types from simple names.
          */
         private String resolveJdkType(String simpleTypeName) {
-            // JDK集合类
+            // java.util collections and related
             return switch (simpleTypeName) {
                 case "List", "ArrayList", "LinkedList", "CopyOnWriteArrayList" -> "java.util." + simpleTypeName;
                 case "Set", "HashSet", "LinkedHashSet", "TreeSet", "CopyOnWriteArraySet" ->
@@ -146,7 +143,7 @@ public class JdtCodeIndexer {
                 case "Queue", "Deque", "ArrayDeque", "PriorityQueue", "LinkedBlockingQueue" ->
                         "java.util." + simpleTypeName;
                 case "Collection", "Collections", "Arrays", "Objects", "Optional" -> "java.util." + simpleTypeName;
-                // JDK基础类
+                // java.lang and basics
                 case "String", "StringBuilder", "StringBuffer" -> "java.lang." + simpleTypeName;
                 case "Integer", "Long", "Double", "Float", "Boolean", "Character", "Byte", "Short" ->
                         "java.lang." + simpleTypeName;
@@ -164,7 +161,7 @@ public class JdtCodeIndexer {
                         simpleTypeName.equals("CompletableFuture") ? "java.util.concurrent." + simpleTypeName : "java.lang." + simpleTypeName;
                 case "Stream", "Collectors" -> "java.util.stream." + simpleTypeName;
                 case "Logger" -> "org.slf4j." + simpleTypeName;
-                // JDK根基类
+                // java.lang root types
                 case "Object" -> "java.lang.Object";
                 case "Map.Entry" -> "java.util.Map.Entry";
                 default -> null;
@@ -172,62 +169,61 @@ public class JdtCodeIndexer {
         }
 
         /**
-         * 解析完整的方法调用（变量名.方法名 -> 完整类名.方法名）
+         * Resolves a method call: receiver.name -> fully qualified class.name.
          */
         public String resolveMethodCall(String expression, String methodName) {
             if (expression == null || expression.isEmpty()) {
-                // 没有调用者，可能是本类方法或静态导入
-                // 优先检查是否是静态导入的方法
+                // No explicit receiver: same class or static import
+                // Prefer static import
                 String staticImport = staticMethodImports.get(methodName);
                 if (staticImport != null) {
                     return staticImport;
                 }
 
-                // 其次返回当前类的完整方法调用
+                // Otherwise current class
                 if (!currentFullClassName.isEmpty()) {
                     return currentFullClassName + "." + methodName;
                 }
                 return methodName;
             }
 
-            // 简化表达式（去掉复杂的链式调用）
+            // Simplify (strip nested calls from the expression)
             String caller = simplifyExpression(expression);
 
-            // 特殊处理：Logger字段
+            // Logger field
             if ("log".equals(caller) || "logger".equals(caller)) {
                 return "org.slf4j.Logger." + methodName;
             }
 
-            // 特殊处理：this 关键字（本类内部方法调用，如 this.validate(order)）
+            // this. calls (e.g. this.validate(order))
             if ("this".equals(caller)) {
                 if (!currentFullClassName.isEmpty()) {
                     return currentFullClassName + "." + methodName;
                 }
             }
 
-            // 尝试从变量映射中获取类型
+            // Resolve from variable name -> type
             String simpleType = variableToSimpleType.get(caller);
 
             if (simpleType != null) {
-                // 优先检查是否是JDK类型
+                // Prefer JDK
                 String jdkType = resolveJdkType(simpleType);
                 if (jdkType != null) {
                     return jdkType + "." + methodName;
                 }
 
-                // 找到了变量的类型，尝试获取完整类名
+                // Explicit import for the variable's type
                 String fullType = simpleToFullType.get(simpleType);
                 if (fullType != null) {
                     return fullType + "." + methodName;
                 } else {
-                    // 没有直接导入，尝试从通配符导入中查找
-                    // 修复：优先选择包名中包含类型相关关键词的包
+                    // No direct import: try wildcard; prefer package patterns matching the type
                     String bestMatch = findBestWildcardMatch(simpleType);
                     if (bestMatch != null) {
                         return bestMatch + "." + methodName;
                     }
 
-                    // 没有导入信息，可能是同包类或内部类
+                    // Same package or simple type
                     if (!packageName.isEmpty()) {
                         return packageName + "." + simpleType + "." + methodName;
                     }
@@ -235,44 +231,44 @@ public class JdtCodeIndexer {
                 }
             }
 
-            // 变量映射未命中，尝试将 caller 作为类名解析（静态方法调用）
-            // 例如：Collections.sort(list)、DateUtils.format(date)、BeanUtils.copyProperties(...)
+            // No variable: treat receiver as a type (static call), e.g. Collections.sort, DateUtils.format
 
-            // 1. 检查 JDK 静态类（如 Collections、Arrays、Objects、Math 等）
+            // 1) JDK static utility types
             String jdkCallerType = resolveJdkType(caller);
             if (jdkCallerType != null) {
                 return jdkCallerType + "." + methodName;
             }
 
-            // 2. 检查精确导入的类名（如 import com.example.utils.DateUtils → DateUtils.format）
+            // 2) Explicit import, e.g. import com.example.utils.DateUtils
             String importedCallerType = simpleToFullType.get(caller);
             if (importedCallerType != null) {
                 return importedCallerType + "." + methodName;
             }
 
-            // 3. caller 首字母大写，符合类名命名约定，推断为同包静态类
+            // 3) Capitalized: likely same-package static class
             if (!caller.isEmpty() && Character.isUpperCase(caller.charAt(0)) && !packageName.isEmpty()) {
                 return packageName + "." + caller + "." + methodName;
             }
 
-            // 无法推断，返回原始格式
+            // Fallback: unqualified
             return caller + "." + methodName;
         }
 
         /**
-         * 从通配符导入中找到最佳匹配的包名
-         * 优先级：
-         * 1. 如果类型名以 "Service" 结尾，优先选择包含 ".service." 的包（而不是 ".service.impl."）
-         * 2. 如果类型名以 "Dao" 结尾，优先选择包含 ".dao." 的包
-         * 3. 如果类型名以 "Controller" 结尾，优先选择包含 ".controller." 的包
-         * 4. 否则返回第一个匹配的包
+         * Picks a best FQN from wildcard imports using name suffix heuristics.
+         * <ol>
+         *   <li>Types ending in Service: prefer ".service." over ".service.impl."</li>
+         *   <li>Dao: prefer ".dao."</li>
+         *   <li>Controller: prefer ".controller."</li>
+         *   <li>Otherwise first match (none if no suffix rule)</li>
+         * </ol>
          */
         private String findBestWildcardMatch(String simpleType) {
             if (wildcardImports.isEmpty()) {
                 return null;
             }
 
-            // 定义类型后缀和对应的包名模式
+            // Suffix -> package substring to prefer
             Map<String, String> typeSuffixToPackagePattern = new HashMap<>();
             typeSuffixToPackagePattern.put("Service", ".service.");
             typeSuffixToPackagePattern.put("Dao", ".dao.");
@@ -280,19 +276,19 @@ public class JdtCodeIndexer {
             typeSuffixToPackagePattern.put("Repository", ".repository.");
             typeSuffixToPackagePattern.put("Mapper", ".mapper.");
 
-            // 检查类型名的后缀
+            // Match suffix
             for (Map.Entry<String, String> entry : typeSuffixToPackagePattern.entrySet()) {
                 String suffix = entry.getKey();
                 String packagePattern = entry.getValue();
 
                 if (simpleType.endsWith(suffix)) {
-                    // 优先选择包含对应模式的包，但排除 impl 包
+                    // Prefer packages matching the pattern, excluding .impl. first
                     for (String wildcardPackage : wildcardImports) {
                         if (wildcardPackage.contains(packagePattern) && !wildcardPackage.contains(".impl.")) {
                             return wildcardPackage + "." + simpleType;
                         }
                     }
-                    // 如果没有找到非 impl 包，再尝试 impl 包
+                    // Then allow impl
                     for (String wildcardPackage : wildcardImports) {
                         if (wildcardPackage.contains(packagePattern)) {
                             return wildcardPackage + "." + simpleType;
@@ -301,19 +297,18 @@ public class JdtCodeIndexer {
                 }
             }
 
-            // 没有匹配的后缀规则，不进行盲目猜测，返回 null
-            // 调用方将继续尝试同包类推断（更保守但更准确）
+            // No suffix rule matched: do not guess; caller may use same-package resolution
             return null;
         }
 
         /**
-         * 简化表达式（提取最后一个标识符）
+         * Simplifies an expression to its last identifier segment.
          */
         private String simplifyExpression(String expression) {
-            // 去掉方法调用：getUserService() -> getUserService
+            // Strip calls: getUserService() -> getUserService
             expression = expression.replaceAll("\\(.*?\\)", "");
 
-            // 提取最后一个点之后的部分
+            // Last segment after the final dot
             if (expression.contains(".")) {
                 String[] parts = expression.split("\\.");
                 return parts[parts.length - 1];
@@ -328,18 +323,18 @@ public class JdtCodeIndexer {
     }
 
     /**
-     * 解析整个项目，返回所有方法信息
+     * Parses the whole project and returns all discovered methods.
      */
     public List<MethodInfo> parseProject() {
         long startTime = System.currentTimeMillis();
-        System.out.println("\n========== 开始解析项目 ==========");
-        System.out.println("项目路径: " + projectRoot);
+        System.out.println("\n========== Parsing project ==========");
+        System.out.println("Project path: " + projectRoot);
 
-        // 获取所有 Java 文件
+        // Collect all .java files
         List<File> javaFiles = findJavaFiles(new File(projectRoot));
-        System.out.println("找到 " + javaFiles.size() + " 个 Java 文件");
+        System.out.println("Found " + javaFiles.size() + " Java file(s)");
 
-        // 解析所有 Java 文件
+        // Parse each file
         List<MethodInfo> allMethods = new ArrayList<>();
         int successCount = 0;
         int failCount = 0;
@@ -350,117 +345,110 @@ public class JdtCodeIndexer {
                 allMethods.addAll(methods);
                 successCount++;
             } catch (Exception e) {
-                System.err.println("  ✗ 文件解析失败: " + javaFile.getPath() + " - " + e.getMessage());
+                System.err.println("  [FAIL] Could not parse file: " + javaFile.getPath() + " - " + e.getMessage());
                 failCount++;
             }
         }
 
         long totalTime = (System.currentTimeMillis() - startTime) / 1000;
-        System.out.println("\n========== 解析完成 ==========");
-        System.out.println("成功: " + successCount + " 个文件");
-        System.out.println("失败: " + failCount + " 个文件");
-        System.out.println("提取方法: " + allMethods.size() + " 个");
-        System.out.println("总耗时: " + totalTime + " 秒\n");
+        System.out.println("\n========== Parse finished ==========");
+        System.out.println("Succeeded: " + successCount + " file(s)");
+        System.out.println("Failed: " + failCount + " file(s)");
+        System.out.println("Methods extracted: " + allMethods.size());
+        System.out.println("Elapsed: " + totalTime + " s\n");
 
         return allMethods;
     }
 
     /**
-     * 使用 Eclipse JDT 提取 Java 文件中的方法信息
+     * Extracts method metadata from a single Java file using the Eclipse JDT AST.
      */
     private List<MethodInfo> extractJavaMethods(File javaFile) {
         List<MethodInfo> methods = new ArrayList<>();
 
         try {
-            // 读取文件内容
+            // Read source
             String source = new String(Files.readAllBytes(javaFile.toPath()));
 
-            // 创建 AST 解析器
+            // AST
             ASTParser parser = ASTParser.newParser(AST.JLS17);
             parser.setSource(source.toCharArray());
             parser.setKind(ASTParser.K_COMPILATION_UNIT);
-            parser.setResolveBindings(false);  // 不解析绑定，提高性能
+            parser.setResolveBindings(false);  // no binding resolution (faster)
 
-            // 解析
             CompilationUnit cu = (CompilationUnit) parser.createAST(null);
 
-            // 获取包名
+            // Package
             String packageName = "";
             if (cu.getPackage() != null) {
                 packageName = cu.getPackage().getName().getFullyQualifiedName();
             }
 
-            // 创建类型解析器
             TypeResolver typeResolver = new TypeResolver();
             typeResolver.setPackageName(packageName);
 
-            // 第一遍：收集导入语句
+            // Pass 1: imports
             List<?> imports = cu.imports();
             for (Object importObj : imports) {
                 if (importObj instanceof ImportDeclaration importDecl) {
                     String importName = importDecl.getName().getFullyQualifiedName();
 
                     if (importDecl.isStatic()) {
-                        // 静态导入：import static com.example.Utils.formatDate
+                        // import static com.example.Utils.formatDate
                         if (!importDecl.isOnDemand()) {
                             typeResolver.addStaticMethodImport(importName);
                         }
-                        // 静态通配符导入暂不处理（import static com.example.Utils.*）
-                    } else if (!importDecl.isOnDemand()) {  // 不是 import xxx.*
+                        // import static com.example.Utils.* is ignored
+                    } else if (!importDecl.isOnDemand()) {  // single type import
                         typeResolver.addImport(importName);
-                    } else {  // 是通配符导入 import xxx.*
+                    } else {  // on-demand import
                         typeResolver.addWildcardImport(importName);
                     }
                 }
             }
 
-            // 使用 Visitor 模式提取方法
+            // Visitor: methods
             final String finalPackageName = packageName;
             final TypeResolver finalTypeResolver = typeResolver;
 
             cu.accept(new ASTVisitor() {
                 private String currentClassName = "";
                 private String currentFullClassName = "";
-                private String currentClassRequestMapping = "";  // 类级别的 @RequestMapping 路径
+                private String currentClassRequestMapping = "";  // class-level @RequestMapping path
                 private TypeResolver currentTypeResolver = new TypeResolver();
 
                 @Override
                 public boolean visit(TypeDeclaration node) {
-                    // 检查是否是内部类
+                    // Inner class
                     boolean isInnerClass = node.getParent() instanceof TypeDeclaration;
 
                     if (isInnerClass) {
-                        // 内部类：将其添加到类型映射中
+                        // Map inner type; do not visit children (avoids methods attributed to outer class)
                         String innerClassName = node.getName().getIdentifier();
                         String fullInnerClassName = currentFullClassName + "." + innerClassName;
                         currentTypeResolver.simpleToFullType.put(innerClassName, fullInnerClassName);
-                        // 内部类不需要单独处理方法，停止遍历其子节点以防止方法被归属到外部类
                         return false;
                     }
 
-                    // 外部类（顶层类）
+                    // Top-level (or direct member) type
                     currentClassName = node.getName().getIdentifier();
                     currentFullClassName = finalPackageName.isEmpty()
                             ? currentClassName
                             : finalPackageName + "." + currentClassName;
 
-                    // 提取类级别的 @RequestMapping 注解
                     currentClassRequestMapping = extractClassRequestMapping(node);
 
-                    // 为当前类创建新的类型解析器（继承导入信息）
+                    // Per-class resolver (inherits compilation-unit imports)
                     currentTypeResolver = new TypeResolver();
                     currentTypeResolver.setPackageName(finalPackageName);
 
-                    // 复制导入信息
                     currentTypeResolver.simpleToFullType.putAll(finalTypeResolver.simpleToFullType);
 
-                    // 复制通配符导入信息
                     currentTypeResolver.wildcardImports.addAll(finalTypeResolver.wildcardImports);
 
-                    // 复制静态方法导入信息
                     currentTypeResolver.staticMethodImports.putAll(finalTypeResolver.staticMethodImports);
 
-                    // 收集内部类信息
+                    // Member types (for name resolution)
                     for (Object typeObj : node.getTypes()) {
                         if (typeObj instanceof TypeDeclaration innerType) {
                             String innerClassName = innerType.getName().getIdentifier();
@@ -469,7 +457,7 @@ public class JdtCodeIndexer {
                         }
                     }
 
-                    // 收集类的字段类型
+                    // Field types
                     for (Object fieldObj : node.getFields()) {
                         if (fieldObj instanceof FieldDeclaration field) {
                             String fieldType = field.getType().toString();
@@ -490,30 +478,30 @@ public class JdtCodeIndexer {
                 public boolean visit(EnumDeclaration node) {
                     boolean isInnerEnum = node.getParent() instanceof TypeDeclaration;
                     if (isInnerEnum) {
-                        // 内部枚举：仅添加到类型映射中，停止遍历其子节点以防止方法被归属到外部类
+                        // Inner enum: map only; do not visit children
                         String innerEnumName = node.getName().getIdentifier();
                         String fullInnerEnumName = currentFullClassName + "." + innerEnumName;
                         currentTypeResolver.simpleToFullType.put(innerEnumName, fullInnerEnumName);
                         return false;
                     }
 
-                    // 顶层枚举类
+                    // Top-level enum
                     currentClassName = node.getName().getIdentifier();
                     currentFullClassName = finalPackageName.isEmpty()
                             ? currentClassName
                             : finalPackageName + "." + currentClassName;
 
-                    // 枚举类通常没有 @RequestMapping 注解
+                    // Enums usually have no @RequestMapping
                     currentClassRequestMapping = "";
 
-                    // 为当前枚举类创建新的类型解析器（继承导入信息）
+                    // Resolver for this enum
                     currentTypeResolver = new TypeResolver();
                     currentTypeResolver.setPackageName(finalPackageName);
                     currentTypeResolver.simpleToFullType.putAll(finalTypeResolver.simpleToFullType);
                     currentTypeResolver.wildcardImports.addAll(finalTypeResolver.wildcardImports);
                     currentTypeResolver.staticMethodImports.putAll(finalTypeResolver.staticMethodImports);
 
-                    // 收集枚举类的字段类型
+                    // Enum constant / field types
                     for (Object bodyDecl : node.bodyDeclarations()) {
                         if (bodyDecl instanceof FieldDeclaration field) {
                             String fieldType = field.getType().toString();
@@ -532,22 +520,19 @@ public class JdtCodeIndexer {
                 @Override
                 public boolean visit(MethodDeclaration node) {
                     try {
-                        // 为当前方法创建类型解析器副本
+                        // Method-scoped copy of the resolver
                         TypeResolver methodTypeResolver = new TypeResolver();
                         methodTypeResolver.setPackageName(finalPackageName);
                         methodTypeResolver.setCurrentFullClassName(currentFullClassName);
 
-                        // 复制类级别的类型信息
                         methodTypeResolver.variableToSimpleType.putAll(currentTypeResolver.variableToSimpleType);
                         methodTypeResolver.simpleToFullType.putAll(currentTypeResolver.simpleToFullType);
 
-                        // 复制通配符导入信息
                         methodTypeResolver.wildcardImports.addAll(currentTypeResolver.wildcardImports);
 
-                        // 复制静态方法导入信息
                         methodTypeResolver.staticMethodImports.putAll(currentTypeResolver.staticMethodImports);
 
-                        // 收集方法参数类型
+                        // Parameters
                         List<?> parameters = node.parameters();
                         for (Object param : parameters) {
                             if (param instanceof SingleVariableDeclaration svd) {
@@ -557,7 +542,7 @@ public class JdtCodeIndexer {
                             }
                         }
 
-                        // 收集方法内的局部变量类型
+                        // Local variables
                         node.accept(new ASTVisitor() {
                             @Override
                             public boolean visit(VariableDeclarationStatement varDecl) {
@@ -573,7 +558,7 @@ public class JdtCodeIndexer {
 
                             @Override
                             public boolean visit(EnhancedForStatement forStmt) {
-                                // 捕获增强 for 循环的迭代变量（如：for (Order o : orders)）
+                                // for (Order o : orders)
                                 SingleVariableDeclaration param = forStmt.getParameter();
                                 String varType = param.getType().toString();
                                 String varName = param.getName().getIdentifier();
@@ -583,7 +568,7 @@ public class JdtCodeIndexer {
 
                             @Override
                             public boolean visit(PatternInstanceofExpression node) {
-                                // 捕获 instanceof 模式匹配绑定变量（如：obj instanceof List<?> list）
+                                // Pattern binding: obj instanceof List<?> list
                                 SingleVariableDeclaration svd = node.getRightOperand();
                                 String varType = svd.getType().toString();
                                 String varName = svd.getName().getIdentifier();
@@ -599,7 +584,7 @@ public class JdtCodeIndexer {
                         info.setFullClassName(currentFullClassName);
                         info.setMethodName(node.getName().getIdentifier());
 
-                        // 构建方法签名
+                        // Signature string
                         StringBuilder signature = new StringBuilder();
                         signature.append(node.getName().getIdentifier()).append("(");
                         for (int i = 0; i < parameters.size(); i++) {
@@ -612,14 +597,11 @@ public class JdtCodeIndexer {
                         signature.append(")");
                         info.setMethodSignature(signature.toString());
 
-                        // 获取行号
                         info.setStartLine(cu.getLineNumber(node.getStartPosition()));
                         info.setEndLine(cu.getLineNumber(node.getStartPosition() + node.getLength()));
 
-                        // 获取方法体
                         info.setMethodBody(node.toString());
 
-                        // 获取注释
                         Javadoc javadoc = node.getJavadoc();
                         if (javadoc != null) {
                             info.setJavadoc(javadoc.toString());
@@ -627,34 +609,31 @@ public class JdtCodeIndexer {
                             info.setJavadoc("");
                         }
 
-                        // 提取方法调用关系（使用类型解析器）
                         info.setCalledMethods(extractMethodCalls(node, methodTypeResolver));
 
-                        // 提取接口注解信息（传入类级别的 @RequestMapping 路径）
                         extractApiAnnotations(node, info, currentClassRequestMapping);
 
                         methods.add(info);
                     } catch (Exception e) {
-                        System.err.println("  ⚠ 方法解析失败: " + currentClassName + "." + node.getName().getIdentifier());
+                        System.err.println("  [WARN] Failed to parse method: " + currentClassName + "." + node.getName().getIdentifier());
                     }
                     return super.visit(node);
                 }
             });
 
         } catch (Exception e) {
-            System.err.println("  ✗ 文件解析失败: " + javaFile.getPath() + " - " + e.getMessage());
+            System.err.println("  [FAIL] Could not parse file: " + javaFile.getPath() + " - " + e.getMessage());
         }
 
         return methods;
     }
 
     /**
-     * 提取方法中调用的其他方法（使用类型解析器）
+     * Collects callee signatures in the method body using the type resolver.
      */
     private List<String> extractMethodCalls(MethodDeclaration methodNode, TypeResolver typeResolver) {
         List<String> calledMethods = new ArrayList<>();
 
-        // 使用 Visitor 模式遍历方法体中的所有方法调用
         methodNode.accept(new ASTVisitor() {
             @Override
             public boolean visit(MethodInvocation node) {
@@ -662,15 +641,14 @@ public class JdtCodeIndexer {
                     String methodName = node.getName().getIdentifier();
                     String expression = node.getExpression() != null ? node.getExpression().toString() : "";
 
-                    // 使用类型解析器解析完整的方法调用
                     String resolvedCall = typeResolver.resolveMethodCall(expression, methodName);
 
-                    // 添加到列表（去重）
+                    // Dedupe
                     if (!calledMethods.contains(resolvedCall)) {
                         calledMethods.add(resolvedCall);
                     }
                 } catch (Exception e) {
-                    // 忽略解析错误
+                    // ignore resolution errors
                 }
                 return super.visit(node);
             }
@@ -683,7 +661,7 @@ public class JdtCodeIndexer {
                         calledMethods.add(methodCall);
                     }
                 } catch (Exception e) {
-                    // 忽略解析错误
+                    // ignore
                 }
                 return super.visit(node);
             }
@@ -691,25 +669,23 @@ public class JdtCodeIndexer {
             @Override
             public boolean visit(org.eclipse.jdt.core.dom.ClassInstanceCreation node) {
                 try {
-                    // 获取构造的类型
                     org.eclipse.jdt.core.dom.Type type = node.getType();
                     String typeName = type.toString();
 
-                    // 过滤JDK标准库类
+                    // Skip JDK types
                     if (isJdkClass(typeName)) {
                         return super.visit(node);
                     }
 
-                    // 解析完整类名
                     String fullClassName = typeResolver.resolveType(typeName);
                     String constructorCall = "new:" + fullClassName;
 
-                    // 添加到列表（去重）
+                    // Dedupe
                     if (!calledMethods.contains(constructorCall)) {
                         calledMethods.add(constructorCall);
                     }
                 } catch (Exception e) {
-                    // 忽略解析错误
+                    // ignore
                 }
                 return super.visit(node);
             }
@@ -719,10 +695,10 @@ public class JdtCodeIndexer {
     }
 
     /**
-     * 判断是否是JDK标准库类
+     * Returns true if the type looks like a JDK / standard library type.
      */
     private boolean isJdkClass(String className) {
-        // 移除泛型参数
+        // Strip generics
         String baseClassName = className.replaceAll("<.*>", "").trim();
 
         return baseClassName.startsWith("java.") ||
@@ -760,7 +736,7 @@ public class JdtCodeIndexer {
 
 
     /**
-     * 提取类级别的 @RequestMapping 路径
+     * Reads the class-level {@code @RequestMapping} path, if any.
      */
     private String extractClassRequestMapping(TypeDeclaration typeNode) {
         try {
@@ -775,19 +751,17 @@ public class JdtCodeIndexer {
                 }
 
                 if (annotationName != null && annotationName.contains("RequestMapping")) {
-                    // 提取路径
                     return extractPathFromAnnotation(annotationStr);
                 }
             }
         } catch (Exception e) {
-            // 忽略错误
+            // ignore
         }
         return "";
     }
 
     /**
-     * 提取方法上的 API 注解信息（PostMapping、GetMapping、ApiOperation 等）
-     * 并拼接类级别的 @RequestMapping 路径
+     * Extracts Spring web mapping annotations on the method and combines with the class path.
      */
     private void extractApiAnnotations(MethodDeclaration methodNode, MethodInfo info, String classRequestMapping) {
         try {
@@ -806,7 +780,6 @@ public class JdtCodeIndexer {
                 }
 
                 if (annotationName != null) {
-                    // 提取 PostMapping 或 GetMapping 等映射注解
                     if (annotationName.contains("PostMapping")) {
                         httpMethod = "POST";
                         methodMapping = extractPathFromAnnotation(annotationStr);
@@ -821,41 +794,36 @@ public class JdtCodeIndexer {
                         methodMapping = extractPathFromAnnotation(annotationStr);
                     } else if (annotationName.contains("RequestMapping")) {
                         methodMapping = extractPathFromAnnotation(annotationStr);
-                        // RequestMapping 可能包含 method 属性，这里简化处理
+                        // method= on @RequestMapping not fully parsed
                         httpMethod = "REQUEST";
                     }
 
-                    // 提取 ApiOperation 注解
                     if (annotationName.contains("ApiOperation")) {
                         apiOperation = annotationStr;
                     }
                 }
             }
 
-            // 拼接完整的 API 路径
             String fullPath = buildFullApiPath(classRequestMapping, methodMapping, httpMethod);
 
-            // 设置提取的注解信息
             info.setApiMapping(fullPath.isEmpty() ? "" : fullPath);
             info.setApiOperation(apiOperation.isEmpty() ? "" : apiOperation);
 
         } catch (Exception e) {
-            // 如果提取失败，设置为空字符串
             info.setApiMapping("");
             info.setApiOperation("");
         }
     }
 
     /**
-     * 从注解字符串中提取路径
-     * 例如: @PostMapping("/start") -> /start
+     * Parses the first path literal from a mapping annotation string, e.g. {@code @PostMapping("/start")} -> {@code /start}.
      */
     private String extractPathFromAnnotation(String annotationStr) {
         if (annotationStr == null || annotationStr.isEmpty()) {
             return "";
         }
 
-        // 匹配 @XxxMapping("/path") 或 @XxxMapping(value = "/path")
+        // @XxxMapping("/path") or @XxxMapping(value = "/path")
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
                 "@\\w+Mapping\\s*\\(\\s*(?:value\\s*=\\s*)?(?:\\{\\s*)?[\"']([^\"']+)[\"']"
         );
@@ -869,9 +837,7 @@ public class JdtCodeIndexer {
     }
 
     /**
-     * 构建完整的 API 路径
-     * 例如: classPath="/api/analysis", methodPath="/start", httpMethod="POST"
-     * -> "POST /api/analysis/start"
+     * Builds a display string like {@code POST /api/analysis/start}.
      */
     private String buildFullApiPath(String classPath, String methodPath, String httpMethod) {
         if (httpMethod.isEmpty()) {
@@ -881,7 +847,6 @@ public class JdtCodeIndexer {
         StringBuilder fullPath = new StringBuilder();
         fullPath.append(httpMethod).append(" ");
 
-        // 拼接类路径
         if (!classPath.isEmpty()) {
             if (!classPath.startsWith("/")) {
                 fullPath.append("/");
@@ -889,7 +854,6 @@ public class JdtCodeIndexer {
             fullPath.append(classPath);
         }
 
-        // 拼接方法路径
         if (!methodPath.isEmpty()) {
             if (!methodPath.startsWith("/") && !fullPath.toString().endsWith("/")) {
                 fullPath.append("/");
@@ -897,8 +861,7 @@ public class JdtCodeIndexer {
             fullPath.append(methodPath);
         }
 
-        // 如果只有 HTTP 方法和类路径，没有方法路径
-        // 例如: @PostMapping (无参数) -> 使用类路径
+        // Empty if only verb and no paths (e.g. bare @PostMapping with no value)
         if (fullPath.toString().equals(httpMethod + " ")) {
             return "";
         }
@@ -907,7 +870,7 @@ public class JdtCodeIndexer {
     }
 
     /**
-     * 查找所有 Java 文件
+     * Walks the project tree for {@code .java} files (skips common build dirs).
      */
     private List<File> findJavaFiles(File directory) {
         List<File> javaFiles = new ArrayList<>();
@@ -920,13 +883,13 @@ public class JdtCodeIndexer {
                     .map(Path::toFile)
                     .forEach(javaFiles::add);
         } catch (IOException e) {
-            System.err.println("查找 Java 文件失败: " + e.getMessage());
+            System.err.println("Failed to list Java files: " + e.getMessage());
         }
         return javaFiles;
     }
 
     /**
-     * 获取相对路径
+     * Path of the file relative to the project root.
      */
     private String getRelativePath(File file) {
         return Paths.get(projectRoot).relativize(file.toPath()).toString();
@@ -934,32 +897,26 @@ public class JdtCodeIndexer {
 
 
     /**
-     * 构建反向调用关系（calledBy）
-     * 遍历所有方法的 calledMethods，建立反向映射，填充每个方法的 calledBy 字段
-     * 支持接口到实现类的映射，解决 Controller 调用 Service 接口但需要追踪到实现类的问题
+     * Builds reverse edges ({@code calledBy}) from {@code calledMethods}, including interface-to-impl propagation
+     * so callers through an interface are reflected on implementing methods.
      *
-     * @param methods 方法信息列表
+     * @param methods all parsed methods
      */
     public void buildCalledByRelations(List<MethodInfo> methods) {
-        // 第一步：构建方法标识到 MethodInfo 的映射（用于快速查找）
-        // key: 完整类名.方法名（如：com.example.service.OrderService.createOrder）
-        // value: List<MethodInfo>，支持同名重载方法共存，避免后者覆盖前者
+        // methodKey (FQN.method) -> overloads
         Map<String, List<MethodInfo>> methodMap = new HashMap<>();
         for (MethodInfo method : methods) {
             String methodKey = method.getFullClassName() + "." + method.getMethodName();
             methodMap.computeIfAbsent(methodKey, k -> new ArrayList<>()).add(method);
-            // 初始化 calledBy 列表
             method.setCalledBy(new ArrayList<>());
         }
 
-        // 第二步：构建接口到实现类的映射关系
-        // key: 接口方法（如：com.example.service.OrderService.createOrder）
-        // value: 实现类方法列表（如：[com.example.service.impl.OrderServiceImpl.createOrder]）
+        // interface method key -> impl method keys
         Map<String, List<String>> interfaceToImplMap = buildInterfaceToImplementationMap(methods);
 
-        System.out.println("✓ 已识别 " + interfaceToImplMap.size() + " 个接口方法的实现关系");
+        System.out.println("[OK] Resolved interface-to-impl mappings for " + interfaceToImplMap.size() + " interface method(s)");
 
-        // 第三步：遍历所有方法，构建反向调用关系
+        // Reverse edges
         for (MethodInfo caller : methods) {
             if (caller.getCalledMethods() == null || caller.getCalledMethods().isEmpty()) {
                 continue;
@@ -968,7 +925,6 @@ public class JdtCodeIndexer {
             String callerKey = caller.getFullClassName() + "." + caller.getMethodName();
 
             for (String calledMethod : caller.getCalledMethods()) {
-                // 尝试在 methodMap 中查找被调用的方法（重载方法均添加调用者）
                 List<MethodInfo> callees = methodMap.get(calledMethod);
                 if (callees != null) {
                     for (MethodInfo callee : callees) {
@@ -977,7 +933,6 @@ public class JdtCodeIndexer {
                         }
                     }
 
-                    // 如果调用的是接口方法，同时也将调用关系添加到所有实现类方法中
                     List<String> implMethods = interfaceToImplMap.get(calledMethod);
                     if (implMethods != null && !implMethods.isEmpty()) {
                         for (String implMethodKey : implMethods) {
@@ -995,33 +950,29 @@ public class JdtCodeIndexer {
             }
         }
 
-        // 统计有调用者的方法数量
         long methodsWithCallers = methods.stream()
                 .filter(m -> m.getCalledBy() != null && !m.getCalledBy().isEmpty())
                 .count();
-        System.out.println("✓ 已构建反向调用关系，共 " + methodsWithCallers + " 个方法有调用者信息");
+        System.out.println("[OK] Built reverse call edges; " + methodsWithCallers + " method(s) have at least one caller");
     }
 
     /**
-     * 构建接口到实现类的映射关系
-     * 通过分析类名模式识别接口和实现类（如：XxxService -> XxxServiceImpl）
+     * Maps interface method keys to implementing method keys from {@code implements} clauses.
      *
-     * @param methods 所有方法信息
-     * @return 接口方法到实现类方法的映射
+     * @param methods all methods
+     * @return interface key -> list of impl keys
      */
     private Map<String, List<String>> buildInterfaceToImplementationMap(List<MethodInfo> methods) {
         Map<String, List<String>> interfaceToImplMap = new HashMap<>();
 
-        // 第一步：按类名分组所有方法
         Map<String, List<MethodInfo>> classMethods = new HashMap<>();
         for (MethodInfo method : methods) {
             classMethods.computeIfAbsent(method.getFullClassName(), k -> new ArrayList<>()).add(method);
         }
 
-        // 第二步：解析所有 Java 文件，识别接口和实现关系
         Map<String, List<String>> classToInterfaces = parseClassImplementsRelations();
 
-        // 第三步：建立接口方法到实现类方法的映射
+        // Per matching method name on impl vs interface
         for (Map.Entry<String, List<String>> entry : classToInterfaces.entrySet()) {
             String implClassName = entry.getKey();
             List<String> interfaces = entry.getValue();
@@ -1037,11 +988,9 @@ public class JdtCodeIndexer {
                     continue;
                 }
 
-                // 建立方法级别的映射
                 for (MethodInfo interfaceMethod : interfaceMethods) {
                     String interfaceMethodKey = interfaceMethod.getFullClassName() + "." + interfaceMethod.getMethodName();
 
-                    // 在实现类中查找同名方法
                     for (MethodInfo implMethod : implMethods) {
                         if (implMethod.getMethodName().equals(interfaceMethod.getMethodName())) {
                             String implMethodKey = implMethod.getFullClassName() + "." + implMethod.getMethodName();
@@ -1056,14 +1005,12 @@ public class JdtCodeIndexer {
     }
 
     /**
-     * 解析所有类的 implements 关系
-     * 返回: 实现类完整类名 -> 接口完整类名列表
+     * Returns implementing class FQN -> list of interface FQNs from {@code implements} clauses.
      */
     private Map<String, List<String>> parseClassImplementsRelations() {
         Map<String, List<String>> classToInterfaces = new HashMap<>();
 
         try (var stream = Files.walk(Paths.get(projectRoot))) {
-            // 遍历所有 Java 文件
             stream.filter(Files::isRegularFile)
                     .filter(p -> p.toString().endsWith(".java"))
                     .filter(p -> !p.toString().contains("target"))
@@ -1072,18 +1019,18 @@ public class JdtCodeIndexer {
                         try {
                             parseClassImplements(javaFile.toFile(), classToInterfaces);
                         } catch (Exception e) {
-                            // 忽略解析错误
+                            // ignore parse errors
                         }
                     });
         } catch (IOException e) {
-            System.err.println("遍历文件失败: " + e.getMessage());
+            System.err.println("Failed to walk project files: " + e.getMessage());
         }
 
         return classToInterfaces;
     }
 
     /**
-     * 解析单个文件的 implements 关系
+     * Parses {@code implements} for one compilation unit.
      */
     private void parseClassImplements(File javaFile, Map<String, List<String>> classToInterfaces) {
         try {
@@ -1094,13 +1041,11 @@ public class JdtCodeIndexer {
 
             CompilationUnit cu = (CompilationUnit) parser.createAST(null);
 
-            // 获取包名
             String packageName = "";
             if (cu.getPackage() != null) {
                 packageName = cu.getPackage().getName().getFullyQualifiedName();
             }
 
-            // 收集导入信息（用于解析接口的完整类名）
             Map<String, String> imports = new HashMap<>();
             for (Object importObj : cu.imports()) {
                 if (importObj instanceof ImportDeclaration importDecl) {
@@ -1115,23 +1060,20 @@ public class JdtCodeIndexer {
             final String finalPackageName = packageName;
             final Map<String, String> finalImports = imports;
 
-            // 遍历所有类型声明
             cu.accept(new ASTVisitor() {
                 @Override
                 public boolean visit(TypeDeclaration node) {
                     String className = node.getName().getIdentifier();
                     String fullClassName = finalPackageName.isEmpty() ? className : finalPackageName + "." + className;
 
-                    // 获取实现的接口列表
                     List<?> superInterfaces = node.superInterfaceTypes();
                     if (superInterfaces != null && !superInterfaces.isEmpty()) {
                         List<String> interfaceNames = new ArrayList<>();
 
                         for (Object interfaceObj : superInterfaces) {
-                            // 剥离泛型参数（如 OrderService<T> → OrderService）
+                            // Strip type args, e.g. OrderService<T> -> OrderService
                             String interfaceName = interfaceObj.toString().replaceAll("<.*>", "").trim();
 
-                            // 解析接口的完整类名
                             String fullInterfaceName = resolveFullClassName(interfaceName, finalPackageName, finalImports);
                             interfaceNames.add(fullInterfaceName);
                         }
@@ -1144,25 +1086,22 @@ public class JdtCodeIndexer {
             });
 
         } catch (Exception e) {
-            // 忽略解析错误
+            // ignore
         }
     }
 
     /**
-     * 解析完整类名
+     * Resolves a type reference to an FQN using imports and the current package.
      */
     private String resolveFullClassName(String simpleName, String currentPackage, Map<String, String> imports) {
-        // 如果已经是完整类名（包含点），直接返回
         if (simpleName.contains(".")) {
             return simpleName;
         }
 
-        // 从导入中查找
         if (imports.containsKey(simpleName)) {
             return imports.get(simpleName);
         }
 
-        // 假设在同一个包下
         if (!currentPackage.isEmpty()) {
             return currentPackage + "." + simpleName;
         }

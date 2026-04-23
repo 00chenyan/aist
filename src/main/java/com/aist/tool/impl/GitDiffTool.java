@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Git变更查询工具
+ * Git history and diff query tool.
  */
 @Slf4j
 @Component
@@ -99,7 +99,7 @@ public class GitDiffTool extends AbstractTool {
 
     @Override
     public int getPriority() {
-        return 50; // Git 操作优先级最低
+        return 50; // lowest priority for Git
     }
 
     @Override
@@ -111,7 +111,7 @@ public class GitDiffTool extends AbstractTool {
             return ToolResult.error(getName(), "", "请指定Git子命令，仅支持: search, files, show, content");
         }
 
-        // 预处理参数：只移除空参数，保留其他所有参数
+        // drop empty arguments only
         List<String> cleanArgs = new ArrayList<>();
         for (String arg : arguments) {
             if (arg == null) continue;
@@ -126,7 +126,7 @@ public class GitDiffTool extends AbstractTool {
 
         String subCommand = cleanArgs.get(0).toLowerCase();
         List<String> params = cleanArgs.size() > 1 ? cleanArgs.subList(1, cleanArgs.size()) : new ArrayList<>();
-        log.info("执行Git命令: {} 参数数量: {}", subCommand, params.size());
+        log.info("run Git subcommand: {} arg count: {}", subCommand, params.size());
 
         try {
             GitUtil.GitCommandResult result;
@@ -134,7 +134,6 @@ public class GitDiffTool extends AbstractTool {
 
             switch (subCommand) {
                 case "search":
-                    // 步骤1：搜索提交记录
                     if (params.isEmpty()) {
                         return ToolResult.error(getName(), subCommand, "请指定搜索关键词（如 #2508055）");
                     }
@@ -142,7 +141,6 @@ public class GitDiffTool extends AbstractTool {
                     result = GitUtil.executeGitCommand(context.getProjectPath(),
                             "log", "--oneline", "--all", "-i", "--grep=" + keyword, "-n", "100");
 
-                    // 检查是否找到提交记录
                     if (result.isSuccess() && (result.getOutput() == null || result.getOutput().trim().isEmpty())) {
                         return ToolResult.success(getName(), subCommand,
                                 "**未找到包含关键词 \"" + keyword + "\" 的提交记录**\n\n" +
@@ -158,18 +156,15 @@ public class GitDiffTool extends AbstractTool {
                     break;
 
                 case "files":
-                    // 步骤2：查看提交修改的文件列表
                     if (params.isEmpty()) {
                         return ToolResult.error(getName(), subCommand, "请指定commitId");
                     }
                     String filesCommitId = params.get(0);
 
-                    // 验证commitId格式
                     if (!filesCommitId.matches("^[a-fA-F0-9]{6,40}$")) {
                         return ToolResult.error(getName(), subCommand, "无效的commitId格式: " + filesCommitId);
                     }
 
-                    // 检查是否有多余参数
                     if (params.size() > 1) {
                         String extraParam = String.join(" ", params.subList(1, params.size()));
                         return ToolResult.error(getName(), subCommand,
@@ -177,11 +172,10 @@ public class GitDiffTool extends AbstractTool {
                                         "正确用法：[TOOL_CALL:GIT:files:" + filesCommitId + "]");
                     }
 
-                    // 执行 git diff-tree 获取文件列表
+                    // git diff-tree --name-only
                     result = GitUtil.executeGitCommand(context.getProjectPath(),
                             "diff-tree", "--no-commit-id", "--name-only", "-r", filesCommitId);
 
-                    // 检查是否有文件修改
                     if (result.isSuccess() && (result.getOutput() == null || result.getOutput().trim().isEmpty())) {
                         return ToolResult.success(getName(), subCommand,
                                 "**提交 " + filesCommitId + " 没有修改任何文件**\n\n可能是合并提交或空提交。");
@@ -192,19 +186,16 @@ public class GitDiffTool extends AbstractTool {
                     break;
 
                 case "show":
-                    // 步骤3：查看文件的代码diff
                     if (params.isEmpty()) {
                         return ToolResult.error(getName(), subCommand, "请指定commitId和完整文件路径");
                     }
 
                     String showCommitId = params.get(0);
 
-                    // 验证commitId格式
                     if (!showCommitId.matches("^[a-fA-F0-9]{6,40}$")) {
                         return ToolResult.error(getName(), subCommand, "无效的commitId格式: " + showCommitId);
                     }
 
-                    // show命令必须指定完整文件路径
                     if (params.size() < 2) {
                         return ToolResult.error(getName(), subCommand,
                                 "show命令必须指定完整文件路径\n" +
@@ -212,10 +203,8 @@ public class GitDiffTool extends AbstractTool {
                                         "      然后复制完整路径");
                     }
 
-                    // 文件路径从第二个参数开始，可能包含空格，所以需要拼接
                     String filePath = String.join(" ", params.subList(1, params.size())).trim();
 
-                    // 检测常见的错误参数
                     if (filePath.equals(".") || filePath.equals("*") || filePath.equals(".*")) {
                         return ToolResult.error(getName(), subCommand,
                                 "不支持通配符作为文件路径参数\n" +
@@ -223,7 +212,6 @@ public class GitDiffTool extends AbstractTool {
                                         "      然后复制完整路径");
                     }
 
-                    // 检测中文字符（可能是占位符）
                     if (filePath.matches(".*[\\u4e00-\\u9fa5]+.*")) {
                         return ToolResult.error(getName(), subCommand,
                                 "文件路径不能包含中文字符: \"" + filePath + "\"\n" +
@@ -231,26 +219,22 @@ public class GitDiffTool extends AbstractTool {
                                         "      然后复制完整路径");
                     }
 
-                    // 直接使用文件路径，不进行自动补全
                     result = GitUtil.executeGitCommand(context.getProjectPath(),
                             "show", showCommitId, "--", filePath);
                     output.append("**提交 ").append(showCommitId).append(" 中文件 ").append(filePath).append(" 的代码变更**:\n\n");
                     break;
 
                 case "content":
-                    // 步骤4：查看文件在某次提交时的完整内容
                     if (params.isEmpty()) {
                         return ToolResult.error(getName(), subCommand, "请指定commitId和完整文件路径");
                     }
 
                     String contentCommitId = params.get(0);
 
-                    // 验证commitId格式
                     if (!contentCommitId.matches("^[a-fA-F0-9]{6,40}$")) {
                         return ToolResult.error(getName(), subCommand, "无效的commitId格式: " + contentCommitId);
                     }
 
-                    // content命令必须指定完整文件路径
                     if (params.size() < 2) {
                         return ToolResult.error(getName(), subCommand,
                                 "content命令必须指定完整文件路径\n" +
@@ -258,10 +242,8 @@ public class GitDiffTool extends AbstractTool {
                                         "      然后复制完整路径");
                     }
 
-                    // 文件路径从第二个参数开始，可能包含空格，所以需要拼接
                     String contentFilePath = String.join(" ", params.subList(1, params.size())).trim();
 
-                    // 检测常见的错误参数
                     if (contentFilePath.equals(".") || contentFilePath.equals("*") || contentFilePath.equals(".*")) {
                         return ToolResult.error(getName(), subCommand,
                                 "不支持通配符作为文件路径参数\n" +
@@ -269,7 +251,6 @@ public class GitDiffTool extends AbstractTool {
                                         "      然后复制完整路径");
                     }
 
-                    // 检测中文字符（可能是占位符）
                     if (contentFilePath.matches(".*[\\u4e00-\\u9fa5]+.*")) {
                         return ToolResult.error(getName(), subCommand,
                                 "文件路径不能包含中文字符: \"" + contentFilePath + "\"\n" +
@@ -277,8 +258,6 @@ public class GitDiffTool extends AbstractTool {
                                         "      然后复制完整路径");
                     }
 
-                    // 直接使用文件路径，不进行自动补全
-                    // 执行 git show commitId:文件路径
                     result = GitUtil.executeGitCommand(context.getProjectPath(),
                             "show", contentCommitId + ":" + contentFilePath);
                     output.append("**提交 ").append(contentCommitId).append(" 时文件 ").append(contentFilePath).append(" 的完整内容**:\n\n");
@@ -292,18 +271,17 @@ public class GitDiffTool extends AbstractTool {
             if (result.isSuccess()) {
                 String gitOutput = result.getOutput();
 
-                // 针对不同命令使用不同的输出限制
                 int maxLength;
                 switch (subCommand) {
                     case "search":
                     case "files":
-                        maxLength = 30000;  // 搜索结果和文件列表通常较短
+                        maxLength = 30000;
                         break;
                     case "show":
-                        maxLength = 50000;  // diff 内容可能较长
+                        maxLength = 50000;
                         break;
                     case "content":
-                        maxLength = 80000;  // 完整文件内容可能很长
+                        maxLength = 80000;
                         break;
                     default:
                         maxLength = 30000;

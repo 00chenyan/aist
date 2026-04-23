@@ -15,8 +15,7 @@ import java.sql.ResultSetMetaData;
 import java.util.List;
 
 /**
- * 统一数据库查询工具
- * 支持：列出所有表、查询表结构、查询数据
+ * Unified read-only database query tool: list tables, describe schema, run SELECT.
  */
 @Slf4j
 @Component
@@ -48,9 +47,9 @@ public class DatabaseTool extends AbstractTool {
     @Override
     public List<String> getExamples() {
         return List.of(
-                "[TOOL_CALL:DATABASE:list]                                # 列出所有表",
-                "[TOOL_CALL:DATABASE:desc:t_user]                         # 查询表结构",
-                "[TOOL_CALL:DATABASE:query:SELECT * FROM t_user]          # 查询数据（自动限制10条）"
+                "[TOOL_CALL:DATABASE:list]                                # list all tables",
+                "[TOOL_CALL:DATABASE:desc:t_user]                         # table structure",
+                "[TOOL_CALL:DATABASE:query:SELECT * FROM t_user]          # query (max 10 rows)"
         );
     }
 
@@ -70,7 +69,7 @@ public class DatabaseTool extends AbstractTool {
 
     @Override
     public int getPriority() {
-        return 30; // 数据库查询优先级中等
+        return 30; // medium priority
     }
 
     @Override
@@ -90,7 +89,7 @@ public class DatabaseTool extends AbstractTool {
                     "数据库未配置，无法查询。请在启动时配置数据库名称和数据源。");
         }
 
-        // 解析子命令
+        // parse subcommand
         if (firstArg.equals("list")) {
             return listAllTables(context);
         } else if (firstArg.equals("desc")) {
@@ -103,7 +102,7 @@ public class DatabaseTool extends AbstractTool {
             if (request.getArguments().size() < 2) {
                 return ToolResult.error(getName(), firstArg, "query命令需要指定SQL语句，格式: [TOOL_CALL:DATABASE:query:SELECT ...]");
             }
-            // 将剩余所有参数用冒号拼接还原SQL（SQL中可能含冒号）
+            // join remaining args with colons (SQL may contain colons)
             String sql = String.join(":", request.getArguments().subList(1, request.getArguments().size())).trim();
             return queryData(sql, context);
         } else {
@@ -113,10 +112,10 @@ public class DatabaseTool extends AbstractTool {
     }
 
     /**
-     * 列出所有表
+     * List all tables in the current schema.
      */
     private ToolResult listAllTables(CodeAnalyzeContextDTO context) {
-        log.info("列出所有数据库表");
+        log.info("list all database tables");
         StringBuilder result = new StringBuilder();
         result.append("数据库 ").append(context.getDatabaseName()).append(" 中的表:\n\n");
 
@@ -150,14 +149,14 @@ public class DatabaseTool extends AbstractTool {
     }
 
     /**
-     * 查询表结构（DESC table_name）
+     * Describe table columns (information_schema).
      */
     private ToolResult describeTable(String tableName, CodeAnalyzeContextDTO context) {
-        log.info("查询表结构: {}", tableName);
+        log.info("describe table: {}", tableName);
         StringBuilder result = new StringBuilder();
 
         try (Connection connection = jdbcUtil.getConnection()) {
-            // 先检查表是否存在
+            // verify table exists
             String checkSql = "SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES " +
                     "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
 
@@ -221,12 +220,12 @@ public class DatabaseTool extends AbstractTool {
     }
 
     /**
-     * 查询数据（SELECT，最多返回10条）
+     * Run SELECT; returns at most 10 rows.
      */
     private ToolResult queryData(String sql, CodeAnalyzeContextDTO context) {
-        log.info("查询数据库数据: {}", sql);
+        log.info("query data: {}", sql);
 
-        // 安全检查
+        // safety checks
         String upperSql = sql.trim().toUpperCase();
         if (!upperSql.startsWith("SELECT")) {
             return ToolResult.error(getName(), "query", "安全限制：只允许执行SELECT查询语句");
@@ -239,7 +238,7 @@ public class DatabaseTool extends AbstractTool {
             }
         }
 
-        // 处理SQL：移除已有LIMIT，添加LIMIT 10
+        // strip trailing LIMIT, then append LIMIT 10
         String safeSql = sql.trim();
         if (safeSql.endsWith(";")) {
             safeSql = safeSql.substring(0, safeSql.length() - 1);
@@ -258,7 +257,7 @@ public class DatabaseTool extends AbstractTool {
                     ResultSetMetaData metaData = rs.getMetaData();
                     int columnCount = metaData.getColumnCount();
 
-                    // 构建表头
+                    // header
                     result.append("| ");
                     for (int i = 1; i <= columnCount; i++) {
                         String columnName = metaData.getColumnLabel(i);
@@ -268,7 +267,7 @@ public class DatabaseTool extends AbstractTool {
                     result.append("------|".repeat(Math.max(0, columnCount)));
                     result.append("\n");
 
-                    // 构建数据行
+                    // rows
                     int rowCount = 0;
                     while (rs.next() && rowCount < 10) {
                         result.append("| ");

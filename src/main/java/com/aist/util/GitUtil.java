@@ -14,39 +14,39 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Git 工具类
- * 用于执行 Git 命令并获取执行结果
+ * Git utility class.
+ * Executes Git commands and returns the results.
  */
 @Slf4j
 public class GitUtil {
 
     /**
-     * 默认命令执行超时时间(秒)
+     * Default command execution timeout (seconds).
      */
     private static final int DEFAULT_TIMEOUT = 60;
 
     /**
-     * Git 命令执行结果
+     * Result of a Git command execution.
      */
     @Data
     public static class GitCommandResult {
         /**
-         * 退出码，0表示成功
+         * Exit code; 0 indicates success.
          */
         private int exitCode;
 
         /**
-         * 标准输出内容
+         * Standard output.
          */
         private String output;
 
         /**
-         * 错误输出内容
+         * Standard error output.
          */
         private String errorOutput;
 
         /**
-         * 是否执行成功
+         * Whether execution succeeded.
          */
         private boolean success;
 
@@ -60,55 +60,55 @@ public class GitUtil {
 
 
     /**
-     * 在指定工作目录执行 Git 命令（使用默认超时时间）
+     * Executes a Git command in the given working directory (default timeout).
      *
-     * @param workDir  Git 仓库工作目录
-     * @param commands Git 命令参数，例如: "log", "--oneline", "-n", "10"
-     * @return 命令执行结果
+     * @param workDir  Git repository working directory
+     * @param commands Git command arguments, e.g. "log", "--oneline", "-n", "10"
+     * @return command execution result
      */
     public static GitCommandResult executeGitCommand(String workDir, String... commands) {
         return executeGitCommand(workDir, DEFAULT_TIMEOUT, commands);
     }
 
     /**
-     * 在指定工作目录执行 Git 命令
+     * Executes a Git command in the given working directory.
      *
-     * @param workDir  Git 仓库工作目录
-     * @param timeout  超时时间（秒）
-     * @param commands Git 命令参数，例如: "log", "--oneline", "-n", "10"
-     * @return 命令执行结果
+     * @param workDir  Git repository working directory
+     * @param timeout  timeout in seconds
+     * @param commands Git command arguments, e.g. "log", "--oneline", "-n", "10"
+     * @return command execution result
      */
     public static GitCommandResult executeGitCommand(String workDir, int timeout, String... commands) {
         if (commands == null || commands.length == 0) {
-            throw new IllegalArgumentException("Git 命令不能为空");
+            throw new IllegalArgumentException("Git command cannot be empty");
         }
 
         File workDirectory = new File(workDir);
         if (!workDirectory.exists() || !workDirectory.isDirectory()) {
-            throw new IllegalArgumentException("工作目录不存在或不是有效目录: " + workDir);
+            throw new IllegalArgumentException("Working directory does not exist or is not a valid directory: " + workDir);
         }
 
         try {
-            // 构建完整的 Git 命令
+            // Build the full Git command
             List<String> command = buildGitCommand(commands);
 
-            log.info("执行 Git 命令: {} (工作目录: {})", String.join(" ", command), workDir);
+            log.info("Executing Git command: {} (working directory: {})", String.join(" ", command), workDir);
 
-            // 创建进程
+            // Create process
             ProcessBuilder processBuilder = new ProcessBuilder(command);
             processBuilder.directory(workDirectory);
 
-            // 启动进程
+            // Start process
             Process process = processBuilder.start();
 
-            // 读取输出 - 使用系统默认字符集（Windows中文系统通常是GBK）
+            // Read output — use system default charset (e.g. GBK on Chinese Windows)
             StringBuilder output = new StringBuilder();
             StringBuilder errorOutput = new StringBuilder();
 
-            // 获取系统默认字符集
+            // System default charset
             String charset = System.getProperty("file.encoding", "UTF-8");
 
-            // 读取标准输出
+            // Read stdout
             Thread outputThread = new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream(), charset))) {
@@ -118,13 +118,13 @@ public class GitUtil {
                         output.append(line).append("\n");
                         lineCount++;
                     }
-                    log.debug("Git 标准输出读取完成，共 {} 行", lineCount);
+                    log.debug("Finished reading Git stdout, {} lines", lineCount);
                 } catch (IOException e) {
-                    log.error("读取 Git 输出失败", e);
+                    log.error("Failed to read Git stdout", e);
                 }
             });
 
-            // 读取错误输出
+            // Read stderr
             Thread errorThread = new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getErrorStream(), charset))) {
@@ -133,100 +133,101 @@ public class GitUtil {
                     while ((line = reader.readLine()) != null) {
                         errorOutput.append(line).append("\n");
                         lineCount++;
-                        log.debug("Git 错误输出[{}]: {}", lineCount, line);
+                        log.debug("Git stderr [{}]: {}", lineCount, line);
                     }
-                    log.debug("Git 错误输出读取完成，共 {} 行", lineCount);
+                    log.debug("Finished reading Git stderr, {} lines", lineCount);
                 } catch (IOException e) {
-                    log.error("读取 Git 错误输出失败", e);
+                    log.error("Failed to read Git stderr", e);
                 }
             });
 
             outputThread.start();
             errorThread.start();
 
-            // 等待进程完成
+            // Wait for process
             boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
 
             if (!finished) {
                 process.destroyForcibly();
-                log.error("Git 命令执行超时");
-                throw new RuntimeException("Git 命令执行超时");
+                log.error("Git command timed out");
+                throw new RuntimeException("Git command timed out");
             }
 
-            log.debug("进程已结束，退出码: {}", process.exitValue());
+            log.debug("Process finished, exit code: {}", process.exitValue());
 
-            // 等待输出线程完全结束（不设置超时，确保读取完整）
+            // Wait for reader threads (no timeout, ensure full read)
             outputThread.join();
             errorThread.join();
 
-            log.debug("输出线程已结束");
+            log.debug("Reader threads finished");
 
             int exitCode = process.exitValue();
             String outputStr = output.toString().trim();
             String errorOutputStr = errorOutput.toString().trim();
 
             if (exitCode == 0) {
-                log.info("Git 命令执行成功，输出长度: {} 字符", outputStr.length());
+                log.info("Git command succeeded, output length: {} characters", outputStr.length());
             } else {
-                log.warn("Git 命令执行失败，退出码: {}, 错误信息: {}", exitCode, errorOutputStr);
+                log.warn("Git command failed, exit code: {}, error: {}", exitCode, errorOutputStr);
             }
 
             return new GitCommandResult(exitCode, outputStr, errorOutputStr);
 
         } catch (IOException e) {
-            log.error("执行 Git 命令失败", e);
-            throw new RuntimeException("执行 Git 命令失败: " + e.getMessage(), e);
+            log.error("Failed to execute Git command", e);
+            throw new RuntimeException("Failed to execute Git command: " + e.getMessage(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("Git 命令执行被中断", e);
-            throw new RuntimeException("Git 命令执行被中断", e);
+            log.error("Git command execution interrupted", e);
+            throw new RuntimeException("Git command execution interrupted", e);
         }
     }
 
     /**
-     * 构建 Git 命令
+     * Builds the Git command list.
      *
-     * @param commands Git 命令参数
-     * @return 完整的命令列表
+     * @param commands Git command arguments
+     * @return full command list
      */
     private static List<String> buildGitCommand(String... commands) {
         List<String> command = new ArrayList<>();
 
-        // 直接调用 git 命令，不使用 cmd /c 包装
-        // 如果 git 在系统 PATH 中，Java 可以直接找到
+        // Invoke git directly; do not wrap with cmd /c
+        // If git is on PATH, the JVM can resolve it
         command.add("git");
         Collections.addAll(command, commands);
 
-        log.debug("构建的命令: {}", command);
+        log.debug("Built command: {}", command);
         return command;
     }
 
 
     /**
-     * 获取多个提交的代码差异
+     * Returns the combined diff for multiple commits.
      *
-     * @param workDir   Git 仓库工作目录
-     * @param commitIds 提交ID列表
-     * @return 所有提交的差异内容
+     * @param workDir   Git repository working directory
+     * @param commitIds list of commit IDs
+     * @return combined diff text for all commits
      */
     public static String getCommitsDiff(String workDir, List<String> commitIds) {
         return getCommitsDiff(workDir, commitIds, DEFAULT_TIMEOUT);
     }
 
     /**
-     * 获取多个提交的代码差异（可指定单提交命令超时）
+     * Returns the combined diff for multiple commits (per-commit timeout).
      */
     public static String getCommitsDiff(String workDir, List<String> commitIds, int timeoutSecondsPerCommit) {
         return getCommitsDiff(workDir, commitIds, timeoutSecondsPerCommit, null);
     }
 
     /**
-     * 获取多个提交的代码差异；若 {@code failedCommitIdsOut} 非空，会将 {@code git show} 非成功或抛异常的提交 id 追加到该列表。
+     * Returns the combined diff for multiple commits; if {@code failedCommitIdsOut} is non-null,
+     * commit IDs for which {@code git show} failed or threw are appended to that list.
      */
     public static String getCommitsDiff(String workDir, List<String> commitIds, int timeoutSecondsPerCommit,
                                         List<String> failedCommitIdsOut) {
         if (commitIds == null || commitIds.isEmpty()) {
-            throw new IllegalArgumentException("提交ID列表不能为空");
+            throw new IllegalArgumentException("Commit ID list cannot be empty");
         }
 
         StringBuilder allDiffs = new StringBuilder();
@@ -238,7 +239,7 @@ public class GitUtil {
                     allDiffs.append("=== 提交ID: ").append(commitId).append(" ===\n");
                     allDiffs.append(result.getOutput()).append("\n\n");
                 } else {
-                    log.warn("获取提交 {} 差异失败: {}", commitId, result.getErrorOutput());
+                    log.warn("Failed to get diff for commit {}: {}", commitId, result.getErrorOutput());
                     if (failedCommitIdsOut != null) {
                         failedCommitIdsOut.add(commitId);
                     }
@@ -246,7 +247,7 @@ public class GitUtil {
                     allDiffs.append("错误: ").append(result.getErrorOutput()).append("\n\n");
                 }
             } catch (Exception e) {
-                log.error("处理提交 {} 时发生异常", commitId, e);
+                log.error("Exception while processing commit {}", commitId, e);
                 if (failedCommitIdsOut != null) {
                     failedCommitIdsOut.add(commitId);
                 }
@@ -265,7 +266,7 @@ public class GitUtil {
             Pattern.compile("(\\d+) deletions?\\(-\\)");
 
     /**
-     * 解析 {@code git diff/show --shortstat} 输出中的插入与删除行数之和。
+     * Parses the sum of inserted and deleted lines from {@code git diff/show --shortstat} output.
      */
     public static int parseShortStatTotalLines(String shortStatBlock) {
         if (shortStatBlock == null || shortStatBlock.isEmpty()) {

@@ -17,9 +17,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * DeepSeek API 工具类
- * 支持与 DeepSeek AI 模型进行对话交互
- * API 文档: <a href="https://api-docs.deepseek.com/zh-cn/">...</a>
+ * DeepSeek API utility.
+ * Supports conversational interaction with DeepSeek models.
+ * API documentation: <a href="https://api-docs.deepseek.com/">https://api-docs.deepseek.com/</a>
  */
 @Slf4j
 @Component
@@ -33,8 +33,8 @@ public class DeepSeekUtil {
     private static final int READ_TIMEOUT = 600;
     private static final int WRITE_TIMEOUT = 300;
     /**
-     * 确定性输出的固定种子值
-     * 使用固定种子配合 temperature=0 可以提高输出的可复现性
+     * Fixed seed for more deterministic output.
+     * A fixed seed with temperature=0 improves reproducibility.
      */
     private static final int DETERMINISTIC_SEED = 42;
 
@@ -66,7 +66,7 @@ public class DeepSeekUtil {
 
 
     /**
-     * 创建 JSON 请求体
+     * Builds a JSON request body.
      */
     private RequestBody createJsonRequestBody(Object obj) throws IOException {
         String json = objectMapper.writeValueAsString(obj);
@@ -74,10 +74,10 @@ public class DeepSeekUtil {
     }
 
     /**
-     * 发送简单对话请求（非流式）
+     * Sends a simple chat request (non-streaming).
      *
-     * @param userMessage 用户消息
-     * @return AI 回复内容
+     * @param userMessage user message
+     * @return assistant reply text
      */
     public String chat(String userMessage) throws IOException {
         List<Message> messages = new ArrayList<>();
@@ -86,36 +86,36 @@ public class DeepSeekUtil {
     }
 
     /**
-     * 发送多轮对话请求（非流式）
+     * Sends a multi-turn chat request (non-streaming).
      *
-     * @param messages 消息列表
-     * @return AI 回复内容
+     * @param messages message list
+     * @return assistant reply text
      */
     public String chat(List<Message> messages) throws IOException {
         return chat(messages, DEFAULT_MODEL);
     }
 
     /**
-     * 发送多轮对话请求（非流式）
+     * Sends a multi-turn chat request (non-streaming).
      *
-     * @param messages 消息列表
-     * @param model    模型名称
-     * @return AI 回复内容
+     * @param messages message list
+     * @param model    model name
+     * @return assistant reply text
      */
     public String chat(List<Message> messages, String model) throws IOException {
         ChatRequest request = new ChatRequest(model, messages, false);
         request.temperature = 0.0;
-        request.seed = DETERMINISTIC_SEED;  // 设置固定种子增强可复现性
+        request.seed = DETERMINISTIC_SEED;  // fixed seed for better reproducibility
         ChatResponse response = chatCompletion(request);
         return response.choices.get(0).message.content;
     }
 
 
     /**
-     * 执行对话完成请求（非流式）
+     * Performs a chat completion request (non-streaming).
      *
-     * @param request 请求对象
-     * @return 响应对象
+     * @param request request payload
+     * @return response object
      */
     public ChatResponse chatCompletion(ChatRequest request) throws IOException {
         Request httpRequest = new Request.Builder()
@@ -138,7 +138,7 @@ public class DeepSeekUtil {
     }
 
     /**
-     * 消息对象
+     * Chat message.
      */
     public static class Message {
         public String role;    // system, user, assistant
@@ -154,7 +154,7 @@ public class DeepSeekUtil {
     }
 
     /**
-     * 对话请求对象
+     * Chat completion request payload.
      */
     public static class ChatRequest {
         public String model;
@@ -184,7 +184,7 @@ public class DeepSeekUtil {
     }
 
     /**
-     * 对话响应对象
+     * Chat completion response.
      */
     public static class ChatResponse {
         public String id;
@@ -194,7 +194,7 @@ public class DeepSeekUtil {
     }
 
     /**
-     * 选择对象
+     * Choice entry in the response.
      */
     public static class Choice {
         public Integer index;

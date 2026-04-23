@@ -14,8 +14,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- * 目标项目数据库连接工具
- * 从 aist.target-db 配置获取数据源
+ * JDBC utility for the target project database.
+ * Builds the data source from {@code aist.target-db} configuration.
  */
 @Slf4j
 @Component
@@ -37,12 +37,12 @@ public class JdbcUtil {
     }
 
     /**
-     * 重建数据源
+     * Rebuilds the data source.
      */
     private void rebuildDataSource() {
         AistConfig.TargetDbConfig targetDb = aistConfig.getTargetDb();
         if (targetDb == null || targetDb.getUrl() == null) {
-            log.warn("未配置目标数据库 (aist.target-db)");
+            log.warn("Target database not configured (aist.target-db)");
             return;
         }
 
@@ -52,21 +52,21 @@ public class JdbcUtil {
                 targetDb.getUsername(),
                 targetDb.getPassword()
         );
-        log.info("目标数据源初始化完成: {}", targetDb.getUrl());
+        log.info("Target data source initialized: {}", targetDb.getUrl());
     }
 
     /**
-     * 关闭数据源
+     * Closes the data source.
      */
     private void closeDataSource() {
         if (targetDataSource instanceof HikariDataSource) {
             ((HikariDataSource) targetDataSource).close();
-            log.info("数据源已关闭");
+            log.info("Data source closed");
         }
     }
 
     /**
-     * 创建数据源
+     * Creates a data source.
      */
     private DataSource createDataSource(String jdbcUrl, String username, String password) {
         HikariConfig config = new HikariConfig();
@@ -84,21 +84,21 @@ public class JdbcUtil {
     }
 
     /**
-     * 获取数据库连接
+     * Obtains a database connection.
      */
     public Connection getConnection() {
         if (targetDataSource == null) {
-            throw new RuntimeException("数据源未初始化，请检查 aist.target-db 配置");
+            throw new RuntimeException("Data source not initialized; check aist.target-db configuration");
         }
         try {
             return targetDataSource.getConnection();
         } catch (SQLException e) {
-            log.error("获取连接失败，尝试重建数据源", e);
+            log.error("Failed to get connection; attempting to rebuild data source", e);
             rebuildDataSource();
             try {
                 return targetDataSource.getConnection();
             } catch (SQLException ex) {
-                throw new RuntimeException("重建后仍无法获取连接", ex);
+                throw new RuntimeException("Still unable to obtain connection after rebuild", ex);
             }
         }
     }

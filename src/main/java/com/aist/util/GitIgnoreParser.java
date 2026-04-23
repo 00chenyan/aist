@@ -11,8 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * .gitignore 文件解析器
- * 用于解析 .gitignore 文件并判断路径是否应该被忽略
+ * Parser for {@code .gitignore} files.
+ * Parses rules and determines whether a path should be ignored.
  */
 @Slf4j
 public class GitIgnoreParser {
@@ -22,9 +22,9 @@ public class GitIgnoreParser {
     private final List<PathMatcher> negatePatterns = new ArrayList<>();
 
     /**
-     * 构造函数
+     * Constructor.
      *
-     * @param projectRoot 项目根目录
+     * @param projectRoot project root directory
      */
     public GitIgnoreParser(String projectRoot) {
         this.projectRoot = Paths.get(projectRoot);
@@ -32,13 +32,13 @@ public class GitIgnoreParser {
     }
 
     /**
-     * 加载 .gitignore 文件
+     * Loads the {@code .gitignore} file.
      */
     private void loadGitIgnore() {
         Path gitignorePath = projectRoot.resolve(".gitignore");
 
         if (!Files.exists(gitignorePath)) {
-            log.debug("未找到 .gitignore 文件: {}", gitignorePath);
+            log.debug(".gitignore not found: {}", gitignorePath);
             addDefaultPatterns();
             return;
         }
@@ -48,19 +48,19 @@ public class GitIgnoreParser {
             for (String line : lines) {
                 parseLine(line.trim());
             }
-            log.debug("成功加载 .gitignore，共 {} 个忽略规则，{} 个否定规则",
+            log.debug("Loaded .gitignore: {} ignore rules, {} negate rules",
                     ignorePatterns.size(), negatePatterns.size());
         } catch (IOException e) {
-            log.warn("读取 .gitignore 文件失败: {}", e.getMessage());
+            log.warn("Failed to read .gitignore: {}", e.getMessage());
             addDefaultPatterns();
         }
     }
 
     /**
-     * 解析单行规则
+     * Parses a single rule line.
      */
     private void parseLine(String line) {
-        // 跳过空行和注释
+        // Skip blank lines and comments
         if (line.isEmpty() || line.startsWith("#")) {
             return;
         }
@@ -70,7 +70,7 @@ public class GitIgnoreParser {
             line = line.substring(1);
         }
 
-        // 转换 gitignore 模式为 glob 模式
+        // Convert gitignore pattern to glob
         String globPattern = convertToGlob(line);
 
         try {
@@ -81,36 +81,36 @@ public class GitIgnoreParser {
                 ignorePatterns.add(matcher);
             }
         } catch (Exception e) {
-            log.debug("无法解析 gitignore 规则: {}", line);
+            log.debug("Cannot parse gitignore rule: {}", line);
         }
     }
 
     /**
-     * 将 gitignore 模式转换为 glob 模式
+     * Converts a gitignore pattern to a glob pattern.
      */
     private String convertToGlob(String pattern) {
-        // 移除前导斜杠
+        // Strip leading slash
         if (pattern.startsWith("/")) {
             pattern = pattern.substring(1);
         }
 
-        // 如果以斜杠结尾，表示目录
+        // Trailing slash means directory
         boolean isDirectory = pattern.endsWith("/");
         if (isDirectory) {
             pattern = pattern.substring(0, pattern.length() - 1);
         }
 
-        // 转换为 glob 模式
+        // Build glob
         StringBuilder glob = new StringBuilder("**");
 
-        // 如果不是以 ** 开头，添加路径分隔符
+        // If not already **-prefixed, add path separator
         if (!pattern.startsWith("**")) {
             glob.append("/");
         }
 
         glob.append(pattern);
 
-        // 如果是目录模式，匹配目录及其所有内容
+        // Directory pattern matches the directory and everything under it
         if (isDirectory) {
             glob.append("/**");
         }
@@ -119,7 +119,7 @@ public class GitIgnoreParser {
     }
 
     /**
-     * 添加默认忽略模式（当没有 .gitignore 文件时）
+     * Adds default ignore patterns when no {@code .gitignore} exists.
      */
     private void addDefaultPatterns() {
         String[] defaultPatterns = {
@@ -140,42 +140,41 @@ public class GitIgnoreParser {
                 PathMatcher matcher = projectRoot.getFileSystem().getPathMatcher("glob:" + pattern);
                 ignorePatterns.add(matcher);
             } catch (Exception e) {
-                log.debug("无法添加默认规则: {}", pattern);
+                log.debug("Cannot add default rule: {}", pattern);
             }
         }
     }
 
     /**
-     * 判断路径是否应该被忽略
+     * Returns whether the path should be ignored.
      *
-     * @param path 要检查的路径
-     * @return true 如果应该被忽略
+     * @param path path to check
+     * @return true if ignored
      */
     public boolean isIgnored(Path path) {
-        // 获取相对路径
+        // Relative path from project root
         Path relativePath;
         try {
             relativePath = projectRoot.relativize(path);
         } catch (Exception e) {
-            // 如果无法获取相对路径，使用绝对路径
+            // Fall back to absolute path
             relativePath = path;
         }
 
-        // 检查否定规则（! 开头的规则）
+        // Negation rules (!)
         for (PathMatcher matcher : negatePatterns) {
             if (matcher.matches(relativePath)) {
-                return false; // 明确不忽略
+                return false; // explicitly not ignored
             }
         }
 
-        // 检查忽略规则
+        // Ignore rules
         for (PathMatcher matcher : ignorePatterns) {
             if (matcher.matches(relativePath)) {
-                return true; // 应该忽略
+                return true; // ignored
             }
         }
 
-        return false; // 不忽略
+        return false; // not ignored
     }
 }
-
