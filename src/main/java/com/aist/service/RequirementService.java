@@ -11,8 +11,5 @@ import java.io.IOException;
  */
 public interface RequirementService extends IService<Requirement> {
 
-    /**
-     * 基于单条需求记录上下文与用户消息调用 LLM；记录不存在时返回 null。
-     */
 }
 

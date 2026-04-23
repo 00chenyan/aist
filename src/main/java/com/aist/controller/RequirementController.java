@@ -22,7 +22,7 @@ public class RequirementController {
     private RequirementService requirementService;
 
     /**
-     * Get all requirements；{@code onlyEnabled=true} 时仅返回 enable=1 的记录。
+     * List requirements; with {@code onlyEnabled=true} return only rows where {@code enable=1}.
      */
     @GetMapping
     public ResponseEntity<List<Requirement>> getAllRequirements(
@@ -98,7 +98,7 @@ public class RequirementController {
 
 
     /**
-     * 逻辑删除 requirement：将 enable 置为 0（不物理删行）。DELETE 弹窗确认后应调用本接口。
+     * Soft-delete: set {@code enable=0} (row retained). Call after the user confirms in the delete dialog.
      */
     @PostMapping("/{id}/delete")
     public ResponseEntity<Void> softDeleteRequirement(@PathVariable Long id) {
@@ -106,7 +106,7 @@ public class RequirementController {
     }
 
     /**
-     * 软停用（与 {@link #softDeleteRequirement(Long)} 行为相同，保留兼容旧客户端）。
+     * Same behavior as {@link #softDeleteRequirement(Long)}; kept for older clients.
      */
 
     private ResponseEntity<Void> softDeleteById(Long id) {

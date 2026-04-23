@@ -13,27 +13,27 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 工具结果相关性筛选器
- * 使用独立LLM对话判断代码片段是否与问题相关，排除明显无关的内容
+ * Filters tool output for relevance using a separate LLM pass
+ * to drop code snippets that are clearly unrelated to the question.
  */
 @Slf4j
 @Component
 public class RelevanceFilter {
 
     /**
-     * 代码块分隔模式
+     * Pattern splitting code blocks in tool output.
      */
     private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile(
             "###\\s*\\d+\\.\\s*([^\\n]+)\\n([\\s\\S]*?)(?=###\\s*\\d+\\.|$)"
     );
 
     /**
-     * 结果长度阈值，超过此长度才进行筛选
+     * Minimum result length before filtering runs.
      */
     private static final int FILTER_THRESHOLD = 2000;
 
     /**
-     * 筛选工具结果，排除明显无关的代码片段
+     * Filters a successful tool result, removing likely-irrelevant snippets.
      */
     public ToolResult filter(ToolResult result, CodeAnalyzeContextDTO context) {
         if (!result.isSuccess() || result.getResult() == null) {
@@ -50,7 +50,7 @@ public class RelevanceFilter {
             return result;
         }
 
-        log.info("开始筛选工具结果，共 {} 个代码块", blocks.size());
+        log.info("Filtering tool output, {} code blocks", blocks.size());
 
         try {
             List<CodeBlock> relevantBlocks = filterBlocks(blocks, context);
@@ -59,11 +59,11 @@ public class RelevanceFilter {
             }
 
             String filteredContent = rebuildContent(relevantBlocks, blocks.size());
-            log.info("筛选完成，保留 {}/{} 个代码块", relevantBlocks.size(), blocks.size());
+            log.info("Filtering done, kept {}/{} blocks", relevantBlocks.size(), blocks.size());
             return ToolResult.success(result.getToolName(), result.getArguments(), filteredContent);
 
         } catch (Exception e) {
-            log.warn("相关性筛选失败，返回原结果: {}", e.getMessage());
+            log.warn("Relevance filtering failed, returning original result: {}", e.getMessage());
             return result;
         }
     }

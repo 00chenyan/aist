@@ -3,9 +3,9 @@
 
     let lastTaskRecords = [];
     let iactPendingDeleteId = null;
-    /** 与 requirement.html / index.html 一致，后端 CodeAnalyzeRequest.projectId */
+    /** Same as other pages: maps to `CodeAnalyzeRequest.projectId` on the server. */
     const ANALYZE_PROJECT_ID = 1;
-    /** 每个 requirement 独立会话，支持多行并行分析 */
+    /** One session id per requirement row (parallel per-row analysis). */
     const iactSessionIdByReqId = Object.create(null);
     const iactActiveAnalyzeIds = new Set();
     let iactBatchSessionActive = false;
@@ -25,16 +25,16 @@
 
     function formatRequirementStatus(status) {
         if (status === 0 || status === '0') {
-            return '待生成';
+            return 'Pending';
         }
         if (status === 1 || status === '1') {
-            return '生成中';
+            return 'In progress';
         }
         if (status === 2 || status === '2') {
-            return '已完成';
+            return 'Complete';
         }
         if (status == null || status === '') {
-            return '待生成';
+            return 'Pending';
         }
         return String(status);
     }
@@ -85,7 +85,7 @@
             '">' +
             escapeHtml(v.statusLabel) +
             '</span>' +
-            '<button type="button" class="iact-btn-row-refresh" title="刷新此行数据" aria-label="刷新此行">' +
+            '<button type="button" class="iact-btn-row-refresh" title="Refresh this row" aria-label="Refresh this row">' +
             icon +
             '</button></span>'
         );
@@ -167,24 +167,22 @@
     }
 
     /**
-     * 需求描述：{subject}:{description}
-     * git提交记录：{git_commit_id}
-     * 请结合需求和git提交记录分析上述需求的影响范围
+     * Builds the analysis question sent to the model (requirement + commits + impact scope).
      */
     function buildAnalyzePrompt(record) {
         const subject = record.subject != null ? String(record.subject) : '';
         const description = record.description != null ? String(record.description) : '';
         const gitCommitId = record.gitCommitId != null ? String(record.gitCommitId) : '';
         return (
-            '需求描述：' +
+            'Requirement description: ' +
             subject +
             ':' +
             description +
             '\n' +
-            'git提交记录：' +
+            'Git commit(s): ' +
             gitCommitId +
             '\n' +
-            '请结合需求和git提交记录分析上述需求的影响范围'
+            'Please analyze the impact scope of this requirement using the description and commit information above.'
         );
     }
 
@@ -214,7 +212,7 @@
             iactSessionIdByReqId[idStr] = data.sessionId;
             return iactSessionIdByReqId[idStr];
         }
-        throw new Error((data && data.message) || '创建分析会话失败');
+        throw new Error((data && data.message) || 'Failed to create analysis session');
     }
 
     function reapplyRowAnalyzeBusyFromActiveSet() {
@@ -226,11 +224,11 @@
     async function runIactAnalyzeSync(requestBody, state) {
         const data = await window.IactApi.analyzeSync(requestBody);
         if (!data || !data.success) {
-            throw new Error((data && data.message) || '分析失败');
+            throw new Error((data && data.message) || 'Analysis failed');
         }
         if (data.eventType === 'question') {
             alert(
-                '当前分析需要模型进一步澄清，本页暂不支持多轮对话，请调整任务描述后重试。'
+                'The model needs more detail to continue. This page does not support multi-turn clarification; update the task description and try again.'
             );
             state.doneData = '';
             return;
@@ -265,7 +263,7 @@
     }
 
     /**
-     * 与单条 Analyze 相同逻辑；可选无标题/描述时静默跳过（供批量用）。
+     * Same as single-row Analyze; batch mode can skip the empty check silently.
      */
     async function runAnalyzeCore(record, options) {
         options = options || {};
@@ -277,7 +275,7 @@
         const desc = record.description != null ? String(record.description).trim() : '';
         if (!subj && !desc) {
             if (!options.skipEmptyAlert) {
-                alert('请先填写任务名称或描述后再分析。');
+                alert('Enter a task name or description before running analysis.');
             }
             return;
         }
@@ -307,7 +305,7 @@
             await loadTasks();
         } catch (e) {
             console.error(e);
-            alert('分析或保存失败: ' + (e.message || 'Network error'));
+            alert('Analysis or save failed: ' + (e.message || 'Network error'));
         } finally {
             iactActiveAnalyzeIds.delete(idStr);
             delete iactSessionIdByReqId[idStr];
@@ -320,7 +318,7 @@
     }
 
     /**
-     * 创建会话并拉取同步分析，将结果写入 requirement.analysisResults
+     * Create a session, run sync analysis, and persist to `requirement.analysisResults`.
      */
     async function runAnalyzeAndPersistToRequirement(record) {
         if (iactBatchSessionActive) {
@@ -333,7 +331,7 @@
     }
 
     /**
-     * enable=1、status ≠ 2 的任务，按顺序执行分析（与单条 Analyze 相同 API）。
+     * Sequentially analyze enabled tasks (enable=1) that are not yet complete (status ≠ 2).
      */
     async function runBatchAnalyzeSequentially() {
         if (iactBatchSessionActive) {
@@ -347,7 +345,7 @@
             raw = await window.IactApi.listRequirements({ onlyEnabled: true });
         } catch (e) {
             console.error(e);
-            alert('无法加载任务列表: ' + (e.message || 'Network error'));
+            alert('Failed to load task list: ' + (e.message || 'Network error'));
             return;
         }
         const records = Array.isArray(raw) ? raw : [];
@@ -366,7 +364,7 @@
                 return r.id;
             });
         if (initialIds.length === 0) {
-            alert('没有待分析任务（均已「已完成」或已停用）。');
+            alert('No tasks to analyze (all are complete or disabled).');
             return;
         }
         if (!confirm('Run analysis on ' + initialIds.length + ' task(s) one by one?')) {
@@ -406,7 +404,7 @@
     }
 
     /**
-     * 源码行级高亮：ATX 标题中 # 与标题文分色；代码块内整行不解析为标题（避免 ``` 内误高亮）
+     * Line-level MD source highlight: style ATX # marks vs body; fenced blocks stay plain.
      */
     function mdSourceToHighlightedHtml(s) {
         const lines = String(s).split('\n');
@@ -448,10 +446,10 @@
     }
 
     /**
-     * analysis_results：仅展示带语法高亮的 Markdown 源码（全屏层）
+     * Full-screen layer: show `analysis_results` as highlighted Markdown source.
      */
     function openAnalysisPreviewModal(raw) {
-        const text = raw != null && String(raw).trim() !== '' ? String(raw) : '（无分析结果）';
+        const text = raw != null && String(raw).trim() !== '' ? String(raw) : '(No analysis result)';
         const modal = $('previewModal');
         const content = $('previewContent');
         if (!content || !modal) {
@@ -512,7 +510,7 @@
     }
 
     /**
-     * 拉取最新列表，仅更新指定表列的单元格；行集合变化时回退为整表重绘。
+     * Refresh one column in place; re-render the whole table if row ids diverge.
      */
     async function refreshColumn(col, triggerBtn) {
         if (IACT_COLS.indexOf(col) < 0) {
@@ -582,7 +580,7 @@
             reapplyRowAnalyzeBusyFromActiveSet();
         } catch (e) {
             console.error(e);
-            alert('刷新失败。请检查网络或控制台。');
+            alert('Refresh failed. Check the network or browser console.');
         } finally {
             if (triggerBtn) {
                 triggerBtn.classList.remove('is-loading');
@@ -666,7 +664,7 @@
                 return;
             }
             console.error(e);
-            alert('刷新失败。请检查网络或控制台。');
+            alert('Refresh failed. Check the network or browser console.');
         } finally {
             if (triggerBtn) {
                 triggerBtn.classList.remove('is-loading');

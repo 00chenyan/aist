@@ -17,8 +17,8 @@ public class MethodInfo {
     private String methodBody;
     private String comment;
     private String javadoc;
-    private List<String> calledMethods;  // 该方法调用的其他方法列表（格式：完整类名.方法名）
-    private List<String> calledBy;  // 调用者信息列表（格式：完整类名.方法名），记录当前方法被哪些其他方法调用
-    private String apiMapping;  // 接口映射信息（PostMapping/GetMapping 等）
-    private String apiOperation;  // API 操作信息（ApiOperation 注解内容）
+    private List<String> calledMethods;  // Methods invoked by this method (format: fullyQualifiedClassName.methodName)
+    private List<String> calledBy;  // Callers (format: fullyQualifiedClassName.methodName)
+    private String apiMapping;  // HTTP mapping (PostMapping/GetMapping, etc.)
+    private String apiOperation;  // ApiOperation summary/description text
 }

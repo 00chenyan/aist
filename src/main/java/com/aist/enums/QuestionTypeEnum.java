@@ -8,12 +8,12 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum QuestionTypeEnum {
 
-    START(1, "分析开始"),
-    STEP(2, "步骤进度"),
-    CONTENT(3, "内容输出"),
-    DONE(4, "分析完成"),
-    ERROR(5, "错误"),
-    QUESTION(6, "澄清问题"),
+    START(1, "Analysis started"),
+    STEP(2, "Step progress"),
+    CONTENT(3, "Streamed content"),
+    DONE(4, "Analysis complete"),
+    ERROR(5, "Error"),
+    QUESTION(6, "Clarification"),
     ;
 
     private final Integer code;

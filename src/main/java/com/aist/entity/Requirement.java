@@ -27,12 +27,12 @@ public class Requirement {
     private LocalDateTime requirementTime;
 
     /**
-     * 主题/标题（扩展字段，可与 title 并存）
+     * Subject/title (extension field; may coexist with title)
      */
     private String subject;
 
     /**
-     * 描述（扩展字段）
+     * Description (extension field)
      */
     private String description;
 
@@ -42,10 +42,9 @@ public class Requirement {
 
     private String analysisResults;
 
-    /** 1 启用，0 停用 */
+    /** 1 enabled, 0 disabled */
     private Integer enable;
 
-    /** 0-待生成 1-生成中 2-已完成 */
+    /** 0 pending generation, 1 generating, 2 completed */
     private Integer status;
 }
-
