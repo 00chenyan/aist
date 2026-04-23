@@ -11,20 +11,20 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 工具注册中心 - 工厂模式
- * 管理所有工具的注册和查找
+ * Tool registry (factory pattern).
+ * Registers and resolves tools.
  */
 @Slf4j
 @Component
 public class ToolRegistry {
 
     /**
-     * 工具映射表
+     * Tool map by upper-case name.
      */
     private final Map<String, Tool> tools = new ConcurrentHashMap<>();
 
     /**
-     * 注入所有Tool实现
+     * All {@link Tool} beans.
      */
     private final List<Tool> toolList;
 
@@ -33,32 +33,32 @@ public class ToolRegistry {
     }
 
     /**
-     * 初始化时自动注册所有工具
+     * Auto-registers all tools on startup.
      */
     @PostConstruct
     public void init() {
         for (Tool tool : toolList) {
             register(tool);
         }
-        log.info("工具注册中心初始化完成，共注册 {} 个工具", tools.size());
+        log.info("Tool registry initialized, {} tools registered", tools.size());
     }
 
     /**
-     * 注册工具
+     * Registers a tool.
      *
-     * @param tool 工具实例
+     * @param tool tool instance
      */
     public void register(Tool tool) {
         String name = tool.getName().toUpperCase();
         tools.put(name, tool);
-        log.debug("注册工具: {}", name);
+        log.debug("Registered tool: {}", name);
     }
 
     /**
-     * 获取工具
+     * Looks up a tool by name.
      *
-     * @param name 工具名称
-     * @return 工具实例，如果不存在返回null
+     * @param name tool name
+     * @return tool or null
      */
     public Tool getTool(String name) {
         if (name == null) {
@@ -68,14 +68,14 @@ public class ToolRegistry {
     }
 
     /**
-     * 获取所有工具描述（用于生成提示词）
+     * Builds prompt text describing all tools.
      *
-     * @return 工具描述文本
+     * @return formatted descriptions
      */
     public String getAllToolDescriptions() {
         StringBuilder sb = new StringBuilder();
 
-        // 按优先级排序工具
+        // Sort by priority
         List<Tool> sortedTools = tools.values().stream()
                 .sorted(Comparator.comparingInt(Tool::getPriority))
                 .toList();
@@ -87,15 +87,12 @@ public class ToolRegistry {
             sb.append("   格式: [TOOL_CALL:").append(tool.getName()).append(":")
                     .append(tool.getParameterDescription()).append("]\n");
 
-            // 添加适用场景
             if (!tool.getUsageScenario().isEmpty()) {
                 sb.append("   场景: ").append(tool.getUsageScenario()).append("\n");
             }
 
-            // 添加能力说明
             if (!tool.getCapabilities().isEmpty()) {
                 String capabilities = tool.getCapabilities().trim();
-                // 将多行能力说明缩进
                 String[] lines = capabilities.split("\n");
                 for (String line : lines) {
                     if (!line.trim().isEmpty()) {
@@ -104,7 +101,6 @@ public class ToolRegistry {
                 }
             }
 
-            // 添加使用示例
             if (!tool.getExamples().isEmpty()) {
                 sb.append("   示例:\n");
                 for (String example : tool.getExamples()) {
@@ -118,11 +114,11 @@ public class ToolRegistry {
     }
 
     /**
-     * 执行单个工具
+     * Executes a single tool.
      *
-     * @param request 工具请求
-     * @param context 分析上下文
-     * @return 执行结果
+     * @param request tool request
+     * @param context analysis context
+     * @return result
      */
     public ToolResult executeTool(ToolRequest request, CodeAnalyzeContextDTO context) {
         if (request == null || request.getToolName() == null) {
@@ -138,7 +134,7 @@ public class ToolRegistry {
         try {
             return tool.execute(request, context);
         } catch (Exception e) {
-            log.error("工具执行失败: {} - {}", request.getToolName(), e.getMessage(), e);
+            log.error("Tool execution failed: {} - {}", request.getToolName(), e.getMessage(), e);
             return ToolResult.error(request.getToolName(), request.getArgumentsString(), e.getMessage());
         }
     }

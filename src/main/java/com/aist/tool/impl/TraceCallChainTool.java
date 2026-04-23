@@ -15,8 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 双向调用链追踪工具
- * 支持正向追踪（我调用了谁）、反向追踪（谁调用了我）、完整链路追踪
+ * Bidirectional call-chain tracing: forward, backward, or both.
  */
 @Slf4j
 @Component
@@ -43,9 +42,9 @@ public class TraceCallChainTool extends AbstractTool {
     @Override
     public List<String> getExamples() {
         return List.of(
-                "[TOOL_CALL:TRACE_CALL_CHAIN:forward:UserService.login:3]    # 正向追踪3层",
-                "[TOOL_CALL:TRACE_CALL_CHAIN:backward:OrderService.create:2] # 反向追踪2层",
-                "[TOOL_CALL:TRACE_CALL_CHAIN:full:PaymentService.pay:2]      # 双向完整链路2层"
+                "[TOOL_CALL:TRACE_CALL_CHAIN:forward:UserService.login:3]    # forward, depth 3",
+                "[TOOL_CALL:TRACE_CALL_CHAIN:backward:OrderService.create:2] # backward, depth 2",
+                "[TOOL_CALL:TRACE_CALL_CHAIN:full:PaymentService.pay:2]      # both ways, depth 2"
         );
     }
 
@@ -67,7 +66,7 @@ public class TraceCallChainTool extends AbstractTool {
 
     @Override
     public int getPriority() {
-        return 9; // 调用链分析优先级较高
+        return 9; // high priority for call-chain questions
     }
 
     @Override
@@ -110,7 +109,6 @@ public class TraceCallChainTool extends AbstractTool {
 
     @Override
     protected ToolResult doExecute(ToolRequest request, CodeAnalyzeContextDTO context) {
-        // 自动确保项目已解析
         try {
             projectParseService.ensureProjectParsed(context);
         } catch (Exception e) {
@@ -120,7 +118,7 @@ public class TraceCallChainTool extends AbstractTool {
 
         String direction = request.getArguments().get(0).toLowerCase();
         String methodKey = request.getArguments().get(1);
-        int maxDepth; // 默认3层
+        int maxDepth;
 
         try {
             maxDepth = Integer.parseInt(request.getArguments().get(2));
@@ -133,9 +131,8 @@ public class TraceCallChainTool extends AbstractTool {
                     "层数参数必须是数字");
         }
 
-        log.info("追踪调用链: 方向={}, 方法={}, 层数={}", direction, methodKey, maxDepth);
+        log.info("TRACE_CALL_CHAIN: direction={}, method={}, depth={}", direction, methodKey, maxDepth);
 
-        // 查找目标方法
         MethodInfo targetMethod = findMethod(methodKey, context);
         if (targetMethod == null) {
             return ToolResult.notFound(getName(), methodKey,
@@ -153,7 +150,6 @@ public class TraceCallChainTool extends AbstractTool {
         result.append("**追踪方向**: ").append(getDirectionName(direction)).append("\n");
         result.append("**追踪层数**: ").append(maxDepth).append("\n\n");
 
-        // 根据方向执行不同的追踪
         switch (direction) {
             case "forward":
                 result.append(traceForward(targetMethod, maxDepth, context));
@@ -179,7 +175,7 @@ public class TraceCallChainTool extends AbstractTool {
     }
 
     /**
-     * 正向追踪：该方法调用了哪些方法
+     * Forward: callees of {@code method}.
      */
     private String traceForward(MethodInfo method, int maxDepth, CodeAnalyzeContextDTO context) {
         StringBuilder result = new StringBuilder();
@@ -196,7 +192,6 @@ public class TraceCallChainTool extends AbstractTool {
                                        StringBuilder result, CodeAnalyzeContextDTO context) {
         String methodKey = method.getFullClassName() + "." + method.getMethodName();
 
-        // 防止循环调用
         if (visited.contains(methodKey)) {
             result.append(prefix).append("└─ `").append(methodKey).append("` [循环引用]\n");
             return;
@@ -204,7 +199,6 @@ public class TraceCallChainTool extends AbstractTool {
 
         visited.add(methodKey);
 
-        // 输出当前方法
         String layerTag = getLayerTag(method);
         result.append(prefix).append("└─ `").append(methodKey).append("`");
         if (layerTag != null) {
@@ -218,7 +212,6 @@ public class TraceCallChainTool extends AbstractTool {
                 .append("` (行 ").append(method.getStartLine()).append("-")
                 .append(method.getEndLine()).append(")\n");
 
-        // 如果还没到最大深度，继续追踪
         if (currentDepth < maxDepth && method.getCalledMethods() != null && !method.getCalledMethods().isEmpty()) {
             List<String> calledMethods = method.getCalledMethods();
             for (String calledMethodKey : calledMethods) {
@@ -235,7 +228,7 @@ public class TraceCallChainTool extends AbstractTool {
     }
 
     /**
-     * 反向追踪：哪些方法调用了该方法
+     * Backward: callers of {@code method}.
      */
     private String traceBackward(MethodInfo method, int maxDepth, CodeAnalyzeContextDTO context) {
         StringBuilder result = new StringBuilder();
@@ -254,17 +247,13 @@ public class TraceCallChainTool extends AbstractTool {
     }
 
     /**
-     * 反向追踪递归实现（带被调用方法信息）
-     *
-     * @param method 当前方法
-     * @param callee 被当前方法调用的方法（用于提取调用点代码），第一层时为null
+     * Backward recursion; {@code callee} is the child for call-site extraction (null at root).
      */
     private void traceBackwardRecursiveWithCallee(MethodInfo method, MethodInfo callee, int currentDepth, int maxDepth,
                                                   String prefix, Set<String> visited,
                                                   StringBuilder result, CodeAnalyzeContextDTO context) {
         String methodKey = method.getFullClassName() + "." + method.getMethodName();
 
-        // 防止循环调用
         if (visited.contains(methodKey)) {
             result.append(prefix).append("└─ `").append(methodKey).append("` [循环引用]\n");
             return;
@@ -272,7 +261,6 @@ public class TraceCallChainTool extends AbstractTool {
 
         visited.add(methodKey);
 
-        // 输出当前方法
         String layerTag = getLayerTag(method);
         result.append(prefix).append("└─ `").append(methodKey).append("`");
         if (layerTag != null) {
@@ -286,7 +274,6 @@ public class TraceCallChainTool extends AbstractTool {
                 .append("` (行 ").append(method.getStartLine()).append("-")
                 .append(method.getEndLine()).append(")\n");
 
-        // 如果有被调用方法，提取并展示调用点代码
         if (callee != null) {
             String callSiteCode = extractCallSiteCode(method, callee);
             if (callSiteCode != null && !callSiteCode.isEmpty()) {
@@ -297,7 +284,6 @@ public class TraceCallChainTool extends AbstractTool {
             }
         }
 
-        // 如果还没到最大深度，继续追踪
         if (currentDepth < maxDepth && method.getCalledBy() != null && !method.getCalledBy().isEmpty()) {
             List<String> callers = method.getCalledBy();
             for (String callerKey : callers) {
@@ -305,7 +291,6 @@ public class TraceCallChainTool extends AbstractTool {
 
                 if (caller != null) {
                     String newPrefix = prefix + "   ";
-                    // 传递当前方法作为被调用方法，以便提取调用点代码
                     traceBackwardRecursiveWithCallee(caller, method, currentDepth + 1, maxDepth, newPrefix, visited, result, context);
                 } else {
                     result.append(prefix).append("   └─ `").append(callerKey).append("` [未找到]\n");
@@ -315,11 +300,7 @@ public class TraceCallChainTool extends AbstractTool {
     }
 
     /**
-     * 从调用者方法体中提取调用被调用方法的代码行及其上下文
-     *
-     * @param caller 调用者方法
-     * @param callee 被调用方法
-     * @return 调用点代码（包含上下文）
+     * Snippet around the first call to {@code callee} inside {@code caller}'s body.
      */
     private String extractCallSiteCode(MethodInfo caller, MethodInfo callee) {
         if (caller.getMethodBody() == null || caller.getMethodBody().isEmpty()) {
@@ -330,26 +311,22 @@ public class TraceCallChainTool extends AbstractTool {
         String[] lines = caller.getMethodBody().split("\n");
         List<String> resultLines = new ArrayList<>();
 
-        int contextLinesBefore = 2;  // 调用点前显示的行数
-        int contextLinesAfter = 1;   // 调用点后显示的行数
+        int contextLinesBefore = 2;
+        int contextLinesAfter = 1;
 
-        // 查找包含被调用方法名的行
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
-            // 检查是否包含方法调用（方法名后跟括号）
             if (containsMethodCall(line, calleeMethodName)) {
-                // 提取上下文
                 int start = Math.max(0, i - contextLinesBefore);
                 int end = Math.min(lines.length - 1, i + contextLinesAfter);
 
                 for (int j = start; j <= end; j++) {
                     String contextLine = lines[j].trim();
-                    // 跳过空行和纯注释行
                     if (!contextLine.isEmpty() && !contextLine.startsWith("//") && !contextLine.startsWith("/*") && !contextLine.startsWith("*")) {
                         resultLines.add(contextLine);
                     }
                 }
-                break;  // 只取第一个调用点
+                break;  // first call site only
             }
         }
 
@@ -357,31 +334,19 @@ public class TraceCallChainTool extends AbstractTool {
     }
 
     /**
-     * 检查代码行是否包含指定方法的调用
-     * 支持多种调用场景：
-     * 1. 对象方法调用: obj.methodName()
-     * 2. 本类方法调用: methodName()
-     * 3. 条件语句中: if (methodName())
-     * 4. 赋值语句中: var = methodName()
-     * 5. 方法参数中: func(methodName())
-     * 6. return语句中: return methodName()
+     * Heuristic: line contains an invocation of {@code methodName}(…).
      */
     private boolean containsMethodCall(String line, String methodName) {
-        // 模式1: 对象方法调用 .methodName(
         String dotPattern = "\\." + methodName + "\\s*\\(";
         if (line.matches(".*" + dotPattern + ".*")) {
             return true;
         }
 
-        // 模式2-6: 使用更通用的正则表达式匹配
-        // 匹配: 非字母数字字符 + methodName + 可选空格 + 左括号
-        // 这样可以匹配: 空格、左括号、等号、逗号、return等后面的方法调用
         String generalPattern = "[^a-zA-Z0-9_]" + methodName + "\\s*\\(";
         if (line.matches(".*" + generalPattern + ".*")) {
             return true;
         }
 
-        // 模式7: 行首调用 methodName(
         if (line.trim().startsWith(methodName + "(")) {
             return true;
         }
@@ -389,18 +354,13 @@ public class TraceCallChainTool extends AbstractTool {
         return false;
     }
 
-    /**
-     * 完整链路追踪：同时展示正向和反向
-     */
+    /** Renders backward then forward. */
     private String traceFull(MethodInfo method, int maxDepth, CodeAnalyzeContextDTO context) {
         return traceBackward(method, maxDepth, context) +
                 "\n" +
                 traceForward(method, maxDepth, context);
     }
 
-    /**
-     * 查找方法
-     */
     private MethodInfo findMethod(String methodKey, CodeAnalyzeContextDTO context) {
         String searchKey = methodKey.toLowerCase().trim();
         String targetClassName = "";
@@ -418,8 +378,6 @@ public class TraceCallChainTool extends AbstractTool {
             String fullClassName = method.getFullClassName().toLowerCase();
             String methodName = method.getMethodName().toLowerCase();
 
-            // 排除构造方法（构造方法的methodName等于className）
-            // 除非用户明确要查找构造方法
             if (methodName.equals(className) && !targetMethodName.equals(className)) {
                 continue;
             }
@@ -428,16 +386,11 @@ public class TraceCallChainTool extends AbstractTool {
                 if (targetClassName.isEmpty()) {
                     candidates.add(method);
                 } else {
-                    // 精确匹配优先：类名完全相等
                     if (className.equals(targetClassName)) {
-                        candidates.add(0, method); // 插入到最前面
-                    }
-                    // 次优匹配：完整类名以目标类名结尾（如 com.example.Pipeline 匹配 pipeline）
-                    else if (fullClassName.endsWith("." + targetClassName)) {
+                        candidates.add(0, method);
+                    } else if (fullClassName.endsWith("." + targetClassName)) {
                         candidates.add(method);
-                    }
-                    // 模糊匹配：类名包含目标字符串（优先级最低）
-                    else if (className.contains(targetClassName) || fullClassName.contains(targetClassName)) {
+                    } else if (className.contains(targetClassName) || fullClassName.contains(targetClassName)) {
                         candidates.add(method);
                     }
                 }
@@ -447,9 +400,6 @@ public class TraceCallChainTool extends AbstractTool {
         return candidates.isEmpty() ? null : candidates.get(0);
     }
 
-    /**
-     * 根据方法标识查找方法信息
-     */
     private MethodInfo findMethodByKey(String methodKey, CodeAnalyzeContextDTO context) {
         if (context.getMethodMap() != null) {
             return context.getMethodMap().get(methodKey);
@@ -458,9 +408,7 @@ public class TraceCallChainTool extends AbstractTool {
     }
 
 
-    /**
-     * 获取方法所在层标签
-     */
+    /** Layer hint from package / name (English labels). */
     private String getLayerTag(MethodInfo method) {
         String fullClassName = method.getFullClassName().toLowerCase();
 

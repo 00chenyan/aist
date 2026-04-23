@@ -6,18 +6,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 工具请求
+ * Tool invocation request.
  */
 @Data
 public class ToolRequest {
 
     /**
-     * 工具名称
+     * Tool name.
      */
     private String toolName;
 
     /**
-     * 参数列表
+     * Argument list.
      */
     private List<String> arguments = new ArrayList<>();
 
@@ -30,30 +30,29 @@ public class ToolRequest {
     }
 
     /**
-     * 获取参数字符串（用于日志）
+     * Returns arguments as a single string (for logging).
      *
-     * @return 参数字符串
+     * @return joined arguments
      */
     public String getArgumentsString() {
         return String.join(", ", arguments);
     }
 
     /**
-     * 获取第一个参数
+     * Returns the first argument.
      *
-     * @return 第一个参数，如果没有则返回空字符串
+     * @return first argument, or empty string if none
      */
     public String getFirstArgument() {
         return arguments.isEmpty() ? "" : arguments.get(0);
     }
 
     /**
-     * 判断是否有参数
+     * Whether any arguments were provided.
      *
-     * @return 是否有参数
+     * @return true if non-empty
      */
     public boolean hasArguments() {
         return !arguments.isEmpty();
     }
 }
-
