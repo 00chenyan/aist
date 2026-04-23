@@ -141,7 +141,3 @@ The model issues `[TOOL_CALL:TOOL_NAME:args]`; tools are registered at startup i
 | `DATABASE` | Inspect target DB table schema, etc. |
 
 ---
-
-## License
-
-See the license file in this repository, if any; otherwise follow the maintainers’ terms.
